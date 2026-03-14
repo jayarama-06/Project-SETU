@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>SETU Desktop Notifications Screen</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#F0A500",
+                        "background-light": "#F8F9FA",
+                        "background-dark": "#231d0f",
+                        "deep-navy": "#0D1B2A",
+                        "saffron-gold": "#F0A500",
+                        "unread-bg": "#FFFBF0",
+                    },
+                    fontFamily: {
+                        "display": ["Noto Sans", "sans-serif"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100 min-h-screen flex flex-col">
+<header class="bg-deep-navy h-14 flex items-center justify-between px-6 shrink-0 z-10 sticky top-0 shadow-sm">
+<div class="flex items-center gap-3 text-white">
+<span class="material-symbols-outlined text-saffron-gold">notifications</span>
+<h1 class="text-lg font-bold tracking-tight">Notifications</h1>
+</div>
+<div class="flex items-center gap-4 text-white">
+<button class="text-sm font-medium text-white hover:text-saffron-gold transition-colors">
+    Mark All Read
+</button>
+<div class="h-6 w-px bg-white/20"></div>
+<button class="flex items-center gap-1 text-sm font-medium hover:text-saffron-gold transition-colors">
+<span>EN</span>
+<span class="text-white/50">|</span>
+<span>తె</span>
+</button>
+<button class="hover:text-saffron-gold transition-colors ml-2">
+<span class="material-symbols-outlined">account_circle</span>
+</button>
+</div>
+</header>
+<div class="flex flex-1 overflow-hidden">
+<aside class="w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 hidden md:flex flex-col shrink-0">
+<nav class="flex-1 py-4">
+<ul class="space-y-1 px-3">
+<li>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium transition-colors" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+                            Dashboard
+                        </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary/10 text-primary font-medium" href="#">
+<span class="material-symbols-outlined">notifications</span>
+                            Notifications
+                        </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium transition-colors" href="#">
+<span class="material-symbols-outlined">report_problem</span>
+                            All Grievances
+                        </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium transition-colors" href="#">
+<span class="material-symbols-outlined">assessment</span>
+                            Reports
+                        </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium transition-colors" href="#">
+<span class="material-symbols-outlined">settings</span>
+                            Settings
+                        </a>
+</li>
+</ul>
+</nav>
+<div class="p-4 border-t border-slate-200 dark:border-slate-800">
+<button class="w-full flex items-center justify-center gap-2 bg-primary text-deep-navy font-bold py-2.5 px-4 rounded-lg shadow-sm hover:bg-primary/90 transition-colors">
+<span class="material-symbols-outlined">add_circle</span>
+                    Report Issue
+                </button>
+</div>
+</aside>
+<main class="flex-1 overflow-y-auto p-6 lg:p-8">
+<div class="max-w-4xl mx-auto space-y-6">
+<div class="flex items-center justify-between gap-4 overflow-x-auto pb-2 -mx-2 px-2 sm:mx-0 sm:px-0 sm:pb-0 scrollbar-hide">
+<div class="flex flex-nowrap gap-2">
+<button class="px-4 py-1.5 rounded-full bg-deep-navy text-white text-sm font-medium shrink-0">All</button>
+<button class="px-4 py-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 text-sm font-medium transition-colors shrink-0">Unread</button>
+<button class="px-4 py-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 text-sm font-medium transition-colors shrink-0">Escalations</button>
+<button class="px-4 py-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 text-sm font-medium transition-colors shrink-0">Resolutions</button>
+</div>
+</div>
+<div class="space-y-3">
+<div class="bg-unread-bg dark:bg-yellow-900/10 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden flex flex-col sm:flex-row gap-4 p-4 hover:border-slate-300 dark:hover:border-slate-700 transition-colors cursor-pointer group">
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-saffron-gold"></div>
+<div class="flex items-start gap-4 flex-1 pl-2">
+<div class="bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 p-2 rounded-full shrink-0 flex items-center justify-center h-10 w-10">
+<span class="material-symbols-outlined text-xl">warning</span>
+</div>
+<div class="flex-1 min-w-0">
+<div class="flex items-center gap-2 mb-1">
+<h3 class="text-base font-bold text-slate-900 dark:text-white truncate group-hover:text-primary transition-colors">Water pump malfunction escalated</h3>
+</div>
+<p class="text-sm text-slate-600 dark:text-slate-300 mb-2">The issue has been escalated to L1 support due to lack of action within 24 hours.</p>
+<div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-500 dark:text-slate-400">
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">schedule</span> 10 mins ago</span>
+</div>
+</div>
+</div>
+<div class="flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-2 shrink-0">
+<span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-deep-navy text-white">
+                                ID: #GRV-4092
+                            </span>
+</div>
+</div>
+<div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden flex flex-col sm:flex-row gap-4 p-4 hover:border-slate-300 dark:hover:border-slate-700 transition-colors cursor-pointer group">
+<div class="flex items-start gap-4 flex-1">
+<div class="bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 p-2 rounded-full shrink-0 flex items-center justify-center h-10 w-10">
+<span class="material-symbols-outlined text-xl">check_circle</span>
+</div>
+<div class="flex-1 min-w-0">
+<div class="flex items-center gap-2 mb-1">
+<h3 class="text-base font-bold text-slate-900 dark:text-white truncate group-hover:text-primary transition-colors">Delay in mid-day meal supplies resolved</h3>
+</div>
+<p class="text-sm text-slate-600 dark:text-slate-300 mb-2">The supplier has delivered the required inventory. Issue closed.</p>
+<div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-500 dark:text-slate-400">
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">schedule</span> 2 hours ago</span>
+</div>
+</div>
+</div>
+<div class="flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-2 shrink-0">
+<span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-deep-navy text-white">
+                                ID: #GRV-4088
+                            </span>
+</div>
+</div>
+<div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden flex flex-col sm:flex-row gap-4 p-4 hover:border-slate-300 dark:hover:border-slate-700 transition-colors cursor-pointer group">
+<div class="flex items-start gap-4 flex-1">
+<div class="bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 p-2 rounded-full shrink-0 flex items-center justify-center h-10 w-10">
+<span class="material-symbols-outlined text-xl">info</span>
+</div>
+<div class="flex-1 min-w-0">
+<div class="flex items-center gap-2 mb-1">
+<h3 class="text-base font-bold text-slate-900 dark:text-white truncate group-hover:text-primary transition-colors">New policy update on textbook distribution</h3>
+</div>
+<p class="text-sm text-slate-600 dark:text-slate-300 mb-2">Please review the updated guidelines for the upcoming academic year.</p>
+<div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-500 dark:text-slate-400">
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">schedule</span> 1 day ago</span>
+</div>
+</div>
+</div>
+<div class="flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-2 shrink-0">
+<span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-deep-navy text-white">
+                                SYS-MSG
+                            </span>
+</div>
+</div>
+<div class="bg-unread-bg dark:bg-yellow-900/10 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden flex flex-col sm:flex-row gap-4 p-4 hover:border-slate-300 dark:hover:border-slate-700 transition-colors cursor-pointer group">
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-saffron-gold"></div>
+<div class="flex items-start gap-4 flex-1 pl-2">
+<div class="bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 p-2 rounded-full shrink-0 flex items-center justify-center h-10 w-10">
+<span class="material-symbols-outlined text-xl">done_all</span>
+</div>
+<div class="flex-1 min-w-0">
+<div class="flex items-center gap-2 mb-1">
+<h3 class="text-base font-bold text-slate-900 dark:text-white truncate group-hover:text-primary transition-colors">Textbook shortage acknowledged</h3>
+</div>
+<p class="text-sm text-slate-600 dark:text-slate-300 mb-2">District officer has acknowledged the request and processing the order.</p>
+<div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-500 dark:text-slate-400">
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">schedule</span> 2 days ago</span>
+</div>
+</div>
+</div>
+<div class="flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-2 shrink-0">
+<span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-deep-navy text-white">
+                                ID: #GRV-4075
+                            </span>
+</div>
+</div>
+</div>
+<div class="flex justify-center mt-6">
+<button class="text-primary hover:text-primary/80 font-medium text-sm transition-colors">Load Older Notifications</button>
+</div>
+</div>
+</main>
+</div>
+</body></html>
