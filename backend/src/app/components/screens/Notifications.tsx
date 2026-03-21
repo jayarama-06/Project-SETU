@@ -1,112 +1,37 @@
-import { useState, useRef } from 'react';
-import { ArrowLeft, CheckCircle, AlertTriangle, CheckSquare, Gavel, Info, Trash2, BellOff } from 'lucide-react';
+import { useState } from 'react';
+import { ArrowLeft } from 'lucide-react';
 import { LanguageToggle } from '../components/LanguageToggle';
 import { StaffBottomNav } from '../components/StaffBottomNav';
-import { motion, AnimatePresence, PanInfo } from 'motion/react';
+import { motion, PanInfo } from 'motion/react';
 import { useNavigate } from 'react-router';
+import { useCurrentUser } from '../hooks/useCurrentUser';
+import { useNotifications } from '../hooks/useNotifications';
 
-interface Notification {
-  id: string;
-  issueId: string;
-  type: 'acknowledged' | 'escalation' | 'resolution' | 'dispute' | 'system';
-  title: string;
-  action: string;
-  timestamp: string;
-  isRead: boolean;
-}
+type FilterType = 'all' | 'unread' | 'escalations' | 'resolutions';
 
-interface NotificationsProps {
-  showBackButton?: boolean;
-}
-
-// Notification type configuration
-const getNotificationConfig = (type: string) => {
-  const configs: {
-    [key: string]: { icon: any; color: string; bg: string };
-  } = {
-    acknowledged: {
-      icon: CheckCircle,
-      color: '#059669',
-      bg: '#D1FAE5',
-    },
-    escalation: {
-      icon: AlertTriangle,
-      color: '#F59E0B',
-      bg: '#FEF3C7',
-    },
-    resolution: {
-      icon: CheckSquare,
-      color: '#059669',
-      bg: '#D1FAE5',
-    },
-    dispute: {
-      icon: Gavel,
-      color: '#DC2626',
-      bg: '#FEE2E2',
-    },
-    system: {
-      icon: Info,
-      color: '#4F46E5',
-      bg: '#EEF2FF',
-    },
-  };
-  return configs[type] || configs.system;
+// Map notification types to display info
+const notificationTypeInfo: Record<string, { icon: string; color: string; label: string }> = {
+  issue_acknowledged: { icon: 'check_circle', color: '#10B981', label: 'Acknowledged' },
+  status_update: { icon: 'update', color: '#3B82F6', label: 'Status Update' },
+  escalation: { icon: 'trending_up', color: '#F59E0B', label: 'Escalated' },
+  assignment: { icon: 'person_add', color: '#8B5CF6', label: 'Assigned' },
+  system: { icon: 'info', color: '#6B7280', label: 'System' },
 };
 
-export function Notifications({ showBackButton = false }: NotificationsProps) {
-  const [activeFilter, setActiveFilter] = useState<
-    'all' | 'unread' | 'escalations' | 'resolutions'
-  >('all');
-  const navigate = useNavigate();
+export function Notifications() {
+  const { user } = useCurrentUser();
+  const { 
+    notifications, 
+    unreadCount, 
+    loading, 
+    markAsRead, 
+    markAllAsRead 
+  } = useNotifications({ 
+    userId: user?.id 
+  });
 
-  // Mock notifications data
-  const [notifications, setNotifications] = useState<Notification[]>([
-    {
-      id: '1',
-      issueId: 'SETU-2847',
-      type: 'escalation',
-      title: 'Broken water pipe in girls hostel',
-      action: 'Escalated to L2 - District Official',
-      timestamp: '2 hours ago',
-      isRead: false,
-    },
-    {
-      id: '2',
-      issueId: 'SETU-2846',
-      type: 'acknowledged',
-      title: 'Food quality concerns in mess',
-      action: 'Acknowledged by Block Official',
-      timestamp: '5 hours ago',
-      isRead: false,
-    },
-    {
-      id: '3',
-      issueId: 'SETU-2845',
-      type: 'resolution',
-      title: 'Library AC not working',
-      action: 'Marked as resolved - Pending your confirmation',
-      timestamp: '1 day ago',
-      isRead: true,
-    },
-    {
-      id: '4',
-      issueId: 'SETU-2844',
-      type: 'system',
-      title: 'Safety concern at main gate',
-      action: 'AI urgency score updated to 95',
-      timestamp: '2 days ago',
-      isRead: true,
-    },
-    {
-      id: '5',
-      issueId: 'SETU-2843',
-      type: 'dispute',
-      title: 'Medical supplies shortage',
-      action: 'Your dispute has been reviewed',
-      timestamp: '3 days ago',
-      isRead: true,
-    },
-  ]);
+  const [activeFilter, setActiveFilter] = useState<FilterType>('all');
+  const navigate = useNavigate();
 
   const [swipedNotificationId, setSwipedNotificationId] = useState<
     string | null
@@ -117,11 +42,11 @@ export function Notifications({ showBackButton = false }: NotificationsProps) {
     let filtered = notifications;
 
     if (activeFilter === 'unread') {
-      filtered = notifications.filter((n) => !n.isRead);
+      filtered = notifications.filter((n) => !n.is_read);
     } else if (activeFilter === 'escalations') {
       filtered = notifications.filter((n) => n.type === 'escalation');
     } else if (activeFilter === 'resolutions') {
-      filtered = notifications.filter((n) => n.type === 'resolution');
+      filtered = notifications.filter((n) => n.type === 'status_update' && n.message.toLowerCase().includes('resolved'));
     }
 
     return filtered;
@@ -130,23 +55,25 @@ export function Notifications({ showBackButton = false }: NotificationsProps) {
   const filteredNotifications = getFilteredNotifications();
 
   const handleMarkAllRead = () => {
-    setNotifications((prev) =>
-      prev.map((n) => ({ ...n, isRead: true }))
-    );
+    markAllAsRead();
   };
 
-  const handleNotificationTap = (notification: Notification) => {
+  const handleNotificationTap = async (notification: typeof notifications[0]) => {
     // Mark as read
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === notification.id ? { ...n, isRead: true } : n))
-    );
+    if (!notification.is_read) {
+      await markAsRead(notification.id);
+    }
 
-    // Navigate to issue detail
-    navigate(`/staff/issues/${notification.issueId}`);
+    // Navigate to issue detail if there's an issue_id
+    if (notification.issue_id) {
+      navigate(`/staff/issues/${notification.issue_id}`);
+    }
   };
 
-  const handleDelete = (notificationId: string) => {
-    setNotifications((prev) => prev.filter((n) => n.id !== notificationId));
+  const handleDelete = async (notificationId: string) => {
+    // In a real app, you'd call a delete API here
+    // For now, just mark as read
+    await markAsRead(notificationId);
     setSwipedNotificationId(null);
   };
 
@@ -164,22 +91,21 @@ export function Notifications({ showBackButton = false }: NotificationsProps) {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F8F9FA]">
+      {/* Offline Banner */}
+      <OfflineBanner />
+
       {/* App Bar - Navy 56px */}
       <div
         className="flex items-center justify-between px-4 bg-[#0D1B2A] sticky top-0 z-20"
         style={{ height: '56px' }}
       >
-        {showBackButton ? (
-          <button
-            onClick={() => navigate(-1)}
-            className="min-w-[48px] min-h-[48px] flex items-center justify-center -ml-3"
-            data-i18n="btn_back"
-          >
-            <ArrowLeft size={24} color="white" />
-          </button>
-        ) : (
-          <div style={{ width: '48px' }} />
-        )}
+        <button
+          onClick={() => navigate(-1)}
+          className="min-w-[48px] min-h-[48px] flex items-center justify-center -ml-3"
+          data-i18n="btn_back"
+        >
+          <ArrowLeft size={24} color="white" />
+        </button>
         <h1
           style={{
             fontFamily: 'Noto Sans',
@@ -328,7 +254,7 @@ export function Notifications({ showBackButton = false }: NotificationsProps) {
           <div className="space-y-2">
             <AnimatePresence>
               {filteredNotifications.map((notification) => {
-                const config = getNotificationConfig(notification.type);
+                const config = notificationTypeInfo[notification.type];
                 const Icon = config.icon;
                 const isSwiped = swipedNotificationId === notification.id;
 
@@ -374,12 +300,12 @@ export function Notifications({ showBackButton = false }: NotificationsProps) {
                       onClick={() => handleNotificationTap(notification)}
                       className="cursor-pointer"
                       style={{
-                        backgroundColor: notification.isRead
+                        backgroundColor: notification.is_read
                           ? 'white'
                           : '#FFFBF0',
                         borderRadius: '8px',
                         border: '1px solid #E5E7EB',
-                        borderLeft: notification.isRead
+                        borderLeft: notification.is_read
                           ? '1px solid #E5E7EB'
                           : '4px solid #F0A500',
                         boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)',
@@ -444,7 +370,7 @@ export function Notifications({ showBackButton = false }: NotificationsProps) {
                               color: 'white',
                             }}
                           >
-                            {notification.issueId}
+                            {notification.issue_id}
                           </span>
                         </div>
                       </div>
@@ -458,7 +384,7 @@ export function Notifications({ showBackButton = false }: NotificationsProps) {
       </main>
 
       {/* Bottom Navigation Bar */}
-      <StaffBottomNav unreadNotifications={0} />
+      <StaffBottomNav unreadNotifications={unreadCount} />
     </div>
   );
 }
