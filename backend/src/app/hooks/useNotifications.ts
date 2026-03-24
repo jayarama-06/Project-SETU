@@ -6,6 +6,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
+import { generateSetuId } from './useIssues';
 
 export interface Notification {
   id: string;
@@ -20,9 +21,9 @@ export interface Notification {
   // Joined data
   issue?: {
     id: string;
-    setu_id: string;
     title: string;
     status: string;
+    setu_id?: string; // Computed field
   };
 }
 
@@ -72,7 +73,6 @@ export function useNotifications(options: UseNotificationsOptions = {}): UseNoti
           *,
           issue:issues(
             id,
-            setu_id,
             title,
             status
           )
@@ -91,7 +91,16 @@ export function useNotifications(options: UseNotificationsOptions = {}): UseNoti
 
       if (queryError) throw queryError;
 
-      setNotifications((data || []) as Notification[]);
+      // Add computed setu_id field to joined issue data
+      const notificationsWithSetuId = (data || []).map(notification => ({
+        ...notification,
+        issue: notification.issue ? {
+          ...notification.issue,
+          setu_id: generateSetuId(notification.issue.id)
+        } : undefined
+      }));
+
+      setNotifications(notificationsWithSetuId as Notification[]);
 
       // Count unread
       const { count, error: countError } = await supabase
