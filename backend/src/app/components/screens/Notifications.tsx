@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, BellOff, Trash2 } from 'lucide-react';
 import { LanguageToggle } from '../components/LanguageToggle';
 import { StaffBottomNav } from '../components/StaffBottomNav';
-import { motion, PanInfo } from 'motion/react';
+import { OfflineBanner } from '../components/OfflineBanner';
+import { motion, AnimatePresence, PanInfo } from 'motion/react';
 import { useNavigate } from 'react-router';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { useNotifications } from '../hooks/useNotifications';
@@ -10,12 +11,12 @@ import { useNotifications } from '../hooks/useNotifications';
 type FilterType = 'all' | 'unread' | 'escalations' | 'resolutions';
 
 // Map notification types to display info
-const notificationTypeInfo: Record<string, { icon: string; color: string; label: string }> = {
-  issue_acknowledged: { icon: 'check_circle', color: '#10B981', label: 'Acknowledged' },
-  status_update: { icon: 'update', color: '#3B82F6', label: 'Status Update' },
-  escalation: { icon: 'trending_up', color: '#F59E0B', label: 'Escalated' },
-  assignment: { icon: 'person_add', color: '#8B5CF6', label: 'Assigned' },
-  system: { icon: 'info', color: '#6B7280', label: 'System' },
+const notificationTypeInfo: Record<string, { icon: string; color: string; bg: string; label: string }> = {
+  issue_acknowledged: { icon: 'check_circle', color: '#10B981', bg: '#D1FAE5', label: 'Acknowledged' },
+  status_update: { icon: 'update', color: '#3B82F6', bg: '#DBEAFE', label: 'Status Update' },
+  escalation: { icon: 'trending_up', color: '#F59E0B', bg: '#FEF3C7', label: 'Escalated' },
+  assignment: { icon: 'person_add', color: '#8B5CF6', bg: '#EDE9FE', label: 'Assigned' },
+  system: { icon: 'info', color: '#6B7280', bg: '#F3F4F6', label: 'System' },
 };
 
 export function Notifications() {
@@ -254,8 +255,12 @@ export function Notifications() {
           <div className="space-y-2">
             <AnimatePresence>
               {filteredNotifications.map((notification) => {
-                const config = notificationTypeInfo[notification.type];
-                const Icon = config.icon;
+                const config = notificationTypeInfo[notification.type] || {
+                  icon: 'notifications',
+                  color: '#6B7280',
+                  bg: '#F3F4F6',
+                  label: 'Notification'
+                };
                 const isSwiped = swipedNotificationId === notification.id;
 
                 return (
@@ -324,7 +329,16 @@ export function Notifications() {
                             backgroundColor: config.bg,
                           }}
                         >
-                          <Icon size={20} color={config.color} />
+                          <span
+                            className="material-symbols-rounded"
+                            style={{
+                              fontSize: '20px',
+                              color: config.color,
+                              fontVariationSettings: "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 20",
+                            }}
+                          >
+                            {config.icon}
+                          </span>
                         </div>
 
                         {/* Center: Text Content */}
@@ -341,7 +355,7 @@ export function Notifications() {
                             <span style={{ fontWeight: 600 }}>
                               {notification.title}
                             </span>{' '}
-                            — {notification.action}
+                            — {notification.message}
                           </p>
                           <p
                             style={{
@@ -350,29 +364,36 @@ export function Notifications() {
                               color: '#6B7280',
                             }}
                           >
-                            {notification.timestamp}
+                            {new Date(notification.created_at).toLocaleString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              hour: 'numeric',
+                              minute: '2-digit',
+                            })}
                           </p>
                         </div>
 
                         {/* Right: Issue ID Chip */}
-                        <div
-                          className="flex-shrink-0 px-2 py-1"
-                          style={{
-                            backgroundColor: '#0D1B2A',
-                            borderRadius: '12px',
-                          }}
-                        >
-                          <span
+                        {notification.issue_id && (
+                          <div
+                            className="flex-shrink-0 px-2 py-1"
                             style={{
-                              fontFamily: 'Noto Sans',
-                              fontSize: '10px',
-                              fontWeight: 700,
-                              color: 'white',
+                              backgroundColor: '#0D1B2A',
+                              borderRadius: '12px',
                             }}
                           >
-                            {notification.issue_id}
-                          </span>
-                        </div>
+                            <span
+                              style={{
+                                fontFamily: 'Noto Sans',
+                                fontSize: '10px',
+                                fontWeight: 700,
+                                color: 'white',
+                              }}
+                            >
+                              #{notification.issue?.setu_id || notification.issue_id}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </motion.div>
                   </motion.div>
