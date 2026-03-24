@@ -1,84 +1,46 @@
 import { useState, useRef } from 'react';
-import { ArrowLeft, Plus, FileText, Home, User } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { LanguageToggle } from '../components/LanguageToggle';
+import { StaffBottomNav } from '../components/StaffBottomNav';
+import { OfflineBanner } from '../components/OfflineBanner';
+import { StatusChip } from '../components/StatusChip';
+import { EscalationChip } from '../components/EscalationChip';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router';
-
-interface Issue {
-  id: string;
-  title: string;
-  category: string;
-  status: string;
-  escalationLevel: number;
-  daysAgo: number;
-}
-
-interface MyIssuesProps {
-  onNavigateToIssueDetail?: (issueId: string) => void;
-  onNavigateToReportIssue?: () => void;
-  onNavigateToHome?: () => void;
-  onNavigateToProfile?: () => void;
-  showBackButton?: boolean;
-  onBack?: () => void;
-}
+import { useCurrentUser } from '../hooks/useCurrentUser';
+import { useIssues, Issue } from '../hooks/useIssues';
 
 // Category icons mapping
 const getCategoryIcon = (category: string) => {
   const iconMap: { [key: string]: string } = {
-    infrastructure: '🏗️',
-    health: '⚕️',
-    food: '🍽️',
+    water: '💧',
+    electricity: '⚡',
+    building: '🏗️',
     safety: '🛡️',
-    academics: '📚',
-    utilities: '💡',
+    finance: '💰',
+    other: '📋',
   };
   return iconMap[category.toLowerCase()] || '📋';
-};
-
-// Status chip configuration
-const getStatusConfig = (status: string) => {
-  const configs: { [key: string]: { bg: string; text: string } } = {
-    submitted: { bg: '#EEF2FF', text: '#4F46E5' },
-    acknowledged: { bg: '#DBEAFE', text: '#2563EB' },
-    in_progress: { bg: '#FEF3C7', text: '#D97706' },
-    resolved_pending: { bg: '#D1FAE5', text: '#059669' },
-    resolved_confirmed: { bg: '#059669', text: '#FFFFFF' },
-    escalated_l1: { bg: '#DBEAFE', text: '#2563EB' },
-    escalated_l2: { bg: '#FEF3C7', text: '#D97706' },
-    escalated_l3: { bg: '#FED7AA', text: '#EA580C' },
-    escalated_l4: { bg: '#FEE2E2', text: '#DC2626' },
-  };
-  return configs[status] || configs['submitted'];
 };
 
 // Format status for display
 const formatStatus = (status: string) => {
   const statusMap: { [key: string]: string } = {
-    submitted: 'Submitted',
+    open: 'Open',
     acknowledged: 'Acknowledged',
     in_progress: 'In Progress',
-    resolved_pending: 'Resolved (Pending)',
-    resolved_confirmed: 'Resolved',
-    escalated_l1: 'Escalated - L1',
-    escalated_l2: 'Escalated - L2',
-    escalated_l3: 'Escalated - L3',
-    escalated_l4: 'Escalated - L4',
+    resolved: 'Resolved',
+    closed: 'Closed',
+    escalated: 'Escalated',
   };
   return statusMap[status] || status;
 };
 
-// Escalation level badge configuration
-const getEscalationBadge = (level: number) => {
-  const configs: {
-    [key: number]: { bg: string; text: string; label: string };
-  } = {
-    0: { bg: '#F3F4F6', text: '#6B7280', label: 'L0' },
-    1: { bg: '#DBEAFE', text: '#2563EB', label: 'L1' },
-    2: { bg: '#FEF3C7', text: '#D97706', label: 'L2' },
-    3: { bg: '#FED7AA', text: '#EA580C', label: 'L3' },
-    4: { bg: '#FEE2E2', text: '#DC2626', label: 'L4' },
-  };
-  return configs[level] || configs[0];
+// Get days ago from timestamp
+const getDaysAgo = (timestamp: string): number => {
+  const now = Date.now();
+  const diff = now - new Date(timestamp).getTime();
+  return Math.floor(diff / 86400000);
 };
 
 export function MyIssues() {
@@ -91,65 +53,29 @@ export function MyIssues() {
   const touchStartY = useRef<number>(0);
   const navigate = useNavigate();
 
-  // Mock data - in production, this would come from Supabase
-  const allIssues: Issue[] = [
-    {
-      id: 'SETU-2847',
-      title: 'Broken water pipe in girls hostel',
-      category: 'infrastructure',
-      status: 'escalated_l2',
-      escalationLevel: 2,
-      daysAgo: 3,
-    },
-    {
-      id: 'SETU-2846',
-      title: 'Food quality concerns in mess',
-      category: 'food',
-      status: 'in_progress',
-      escalationLevel: 0,
-      daysAgo: 5,
-    },
-    {
-      id: 'SETU-2845',
-      title: 'Library AC not working',
-      category: 'utilities',
-      status: 'acknowledged',
-      escalationLevel: 0,
-      daysAgo: 7,
-    },
-    {
-      id: 'SETU-2844',
-      title: 'Safety concern at main gate',
-      category: 'safety',
-      status: 'resolved_confirmed',
-      escalationLevel: 0,
-      daysAgo: 10,
-    },
-    {
-      id: 'SETU-2843',
-      title: 'Medical supplies shortage',
-      category: 'health',
-      status: 'resolved_pending',
-      escalationLevel: 0,
-      daysAgo: 12,
-    },
-  ];
+  // Fetch current user and their issues
+  const { user, loading: userLoading } = useCurrentUser();
+  const { issues, loading: issuesLoading, refetch } = useIssues({
+    userId: user?.id,
+    sortBy: 'created_at',
+  });
+
+  const loading = userLoading || issuesLoading;
 
   // Filter issues based on active tab
   const getFilteredIssues = () => {
+    if (!issues) return [];
+    
     if (activeTab === 'active') {
-      return allIssues.filter(
-        (issue) =>
-          !issue.status.includes('resolved') && issue.status !== 'resolved_confirmed'
+      return issues.filter(
+        (issue) => issue.status !== 'resolved' && issue.status !== 'closed'
       );
     } else if (activeTab === 'resolved') {
-      return allIssues.filter(
-        (issue) =>
-          issue.status === 'resolved_pending' ||
-          issue.status === 'resolved_confirmed'
+      return issues.filter(
+        (issue) => issue.status === 'resolved' || issue.status === 'closed'
       );
     }
-    return allIssues;
+    return issues;
   };
 
   const filteredIssues = getFilteredIssues();
@@ -174,11 +100,11 @@ export function MyIssues() {
   const handleTouchEnd = () => {
     if (pullDistance > 64 && !isRefreshing) {
       setIsRefreshing(true);
-      // Simulate refresh
-      setTimeout(() => {
+      // Refetch data from Supabase
+      refetch().finally(() => {
         setIsRefreshing(false);
         setPullDistance(0);
-      }, 1500);
+      });
     } else {
       setPullDistance(0);
     }
@@ -190,6 +116,9 @@ export function MyIssues() {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F8F9FA]">
+      {/* Offline Banner */}
+      <OfflineBanner />
+
       {/* App Bar - Navy 56px */}
       <div
         className="flex items-center justify-between px-4 bg-[#0D1B2A] sticky top-0 z-20"
@@ -334,7 +263,26 @@ export function MyIssues() {
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
-        {filteredIssues.length === 0 ? (
+        {loading ? (
+          /* Loading State */
+          <div className="flex items-center justify-center pt-16">
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{
+                duration: 1,
+                repeat: Infinity,
+                ease: 'linear',
+              }}
+              style={{
+                width: '40px',
+                height: '40px',
+                border: '4px solid #F0A500',
+                borderTopColor: 'transparent',
+                borderRadius: '50%',
+              }}
+            />
+          </div>
+        ) : filteredIssues.length === 0 ? (
           /* Empty State */
           <div className="flex flex-col items-center justify-center px-4 pt-16">
             <div
@@ -357,7 +305,7 @@ export function MyIssues() {
               }}
               data-i18n="empty_no_issues"
             >
-              No issues here
+              No Issues Found
             </h2>
             <button
               onClick={() => navigate('/staff/report')}
@@ -382,14 +330,14 @@ export function MyIssues() {
           /* Issue Card List */
           <div className="p-4 space-y-3">
             {filteredIssues.map((issue) => {
-              const statusConfig = getStatusConfig(issue.status);
-              const escalationBadge = getEscalationBadge(issue.escalationLevel);
               const categoryIcon = getCategoryIcon(issue.category);
+              const daysAgo = getDaysAgo(issue.created_at);
+              const escalationLevel = parseInt(issue.current_level.substring(1)); // Extract number from 'L0', 'L1', etc.
 
               return (
                 <div
                   key={issue.id}
-                  onClick={() => handleIssueClick(issue.id)}
+                  onClick={() => handleIssueClick(issue.setu_id)}
                   className="bg-white cursor-pointer"
                   style={{
                     borderRadius: '8px',
@@ -408,7 +356,7 @@ export function MyIssues() {
                         color: '#0D1B2A',
                       }}
                     >
-                      {issue.id}
+                      {issue.setu_id}
                     </span>
                     <span
                       style={{
@@ -417,7 +365,7 @@ export function MyIssues() {
                         color: '#9CA3AF',
                       }}
                     >
-                      {issue.daysAgo} days ago
+                      {daysAgo} {daysAgo === 1 ? 'day' : 'days'} ago
                     </span>
                   </div>
 
@@ -460,35 +408,11 @@ export function MyIssues() {
                     </div>
 
                     {/* Status Chip */}
-                    <span
-                      className="inline-block px-2 py-1"
-                      style={{
-                        backgroundColor: statusConfig.bg,
-                        color: statusConfig.text,
-                        borderRadius: '12px',
-                        fontFamily: 'Noto Sans',
-                        fontSize: '11px',
-                        fontWeight: 600,
-                      }}
-                    >
-                      {formatStatus(issue.status)}
-                    </span>
+                    <StatusChip status={issue.status as any} size="sm" />
 
                     {/* Escalation Badge - Only show if escalation level > 0 */}
-                    {issue.escalationLevel > 0 && (
-                      <span
-                        className="inline-block px-2 py-1"
-                        style={{
-                          backgroundColor: escalationBadge.bg,
-                          color: escalationBadge.text,
-                          borderRadius: '12px',
-                          fontFamily: 'Noto Sans',
-                          fontSize: '11px',
-                          fontWeight: 700,
-                        }}
-                      >
-                        {escalationBadge.label}
-                      </span>
+                    {escalationLevel > 0 && (
+                      <EscalationChip level={escalationLevel} />
                     )}
                   </div>
                 </div>
@@ -516,95 +440,8 @@ export function MyIssues() {
         <Plus size={28} color="white" strokeWidth={2.5} />
       </button>
 
-      {/* Bottom Navigation Bar - 56px */}
-      <div
-        className="fixed bottom-0 left-0 right-0 bg-white border-t border-[#E5E7EB] z-20"
-        style={{
-          height: '56px',
-          boxShadow: '0 -2px 8px rgba(0, 0, 0, 0.08)',
-        }}
-      >
-        <div className="flex h-full">
-          {/* Home Tab */}
-          <button
-            onClick={() => navigate('/staff/dashboard')}
-            className="flex-1 flex flex-col items-center justify-center gap-1 relative"
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-            }}
-            data-i18n="nav_home"
-          >
-            <Home size={22} color="#6B7280" />
-            <span
-              style={{
-                fontFamily: 'Noto Sans',
-                fontSize: '10px',
-                color: '#6B7280',
-                fontWeight: 500,
-              }}
-            >
-              Home
-            </span>
-          </button>
-
-          {/* My Issues Tab - Active */}
-          <button
-            className="flex-1 flex flex-col items-center justify-center gap-1 relative"
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-            }}
-            data-i18n="nav_my_issues"
-          >
-            <FileText size={22} color="#F0A500" fill="#F0A500" />
-            <span
-              style={{
-                fontFamily: 'Noto Sans',
-                fontSize: '10px',
-                color: '#F0A500',
-                fontWeight: 600,
-              }}
-            >
-              My Issues
-            </span>
-            {/* Active indicator - Saffron underline */}
-            <div
-              className="absolute top-0 left-0 right-0"
-              style={{
-                height: '2px',
-                backgroundColor: '#F0A500',
-              }}
-            />
-          </button>
-
-          {/* Profile Tab */}
-          <button
-            onClick={() => navigate('/staff/settings')}
-            className="flex-1 flex flex-col items-center justify-center gap-1 relative"
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-            }}
-            data-i18n="nav_profile"
-          >
-            <User size={22} color="#6B7280" />
-            <span
-              style={{
-                fontFamily: 'Noto Sans',
-                fontSize: '10px',
-                color: '#6B7280',
-                fontWeight: 500,
-              }}
-            >
-              Profile
-            </span>
-          </button>
-        </div>
-      </div>
+      {/* Bottom Navigation Bar */}
+      <StaffBottomNav unreadNotifications={2} />
     </div>
   );
 }
