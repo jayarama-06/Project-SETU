@@ -7,97 +7,27 @@ import { EscalationLevelBottomSheet } from '../components/EscalationLevelBottomS
 import { WithdrawEndorsementModal } from '../components/WithdrawEndorsementModal';
 import { EndorseIssueModal } from '../components/EndorseIssueModal';
 import { Toast } from '../components/Toast';
+import { AIUrgencyScoreBadgeLarge } from '../components/AIUrgencyScoreBadge';
+import { TimelineAuditLog, AuditLogEntry } from '../components/TimelineAuditLog';
+import { OfflineBanner } from '../components/OfflineBanner';
 import { motion } from 'motion/react';
 import { useNavigate, useParams } from 'react-router';
-
-// ── Issue data type ───────────────────────────────────────────────────────────
-interface TimelineEntry {
-  id: string;
-  actorRole: string;
-  action: string;
-  timestamp: string;
-  isSystemAction?: boolean;
-  isInternalEscalation?: boolean;
-}
-
-interface IssueData {
-  id: string;
-  category: string;
-  categoryIcon?: string;
-  title: string;
-  description: string;
-  status: string;
-  urgencyScore: number;
-  submittedDaysAgo: number;
-  submittedBy: string;
-  reportedByName: string;
-  photo?: string;
-  voiceNote?: { url: string; duration: number };
-  timeline: TimelineEntry[];
-  isEndorsed: boolean;
-  resolvedAt?: string; // For calculating 72h dispute window
-}
-
-// ── Mock issue data store (keyed by issueId) ─────────────────────────────────
-const MOCK_ISSUES: Record<string, IssueData> = {
-  'SETU-2847': {
-    id: 'SETU-2847',
-    category: 'infrastructure',
-    title: 'Broken water pipe in girls hostel',
-    description:
-      'The main water pipe in the girls hostel has burst, causing flooding in the ground floor corridor. Students are unable to access their rooms and water supply has been cut off to prevent further damage. This needs immediate attention as it affects over 120 students.',
-    status: 'escalated_l2',
-    urgencyScore: 105,
-    submittedDaysAgo: 3,
-    submittedBy: 'Ravi Kumar',
-    reportedByName: 'Ravi Kumar',
-    isEndorsed: false,
-    photo:
-      'https://images.unsplash.com/photo-1661520754901-bb5d6b374fde?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080&q=80',
-    timeline: [
-      { id: '1', actorRole: 'District Official', action: 'Marked as resolved after repairs completed', timestamp: '2 hours ago' },
-      { id: '2', actorRole: 'Maintenance Contractor', action: 'Added comment: "Pipe replaced and tested. System operational."', timestamp: '4 hours ago' },
-      { id: '3', actorRole: 'District Official', action: 'Assigned to Maintenance Contractor', timestamp: '1 day ago' },
-      { id: '4', actorRole: 'System', action: 'Escalated to L2 - District Official due to high urgency score', timestamp: '2 days ago', isSystemAction: true, isInternalEscalation: true },
-      { id: '5', actorRole: 'Block Official', action: 'Acknowledged and flagged as urgent', timestamp: '2 days ago' },
-      { id: '6', actorRole: 'Principal', action: 'Endorsed this issue as urgent', timestamp: '2 days ago', isInternalEscalation: true },
-      { id: '7', actorRole: 'School Staff', action: 'Issue submitted', timestamp: '3 days ago' },
-    ],
-  },
-  'SETU-2846': {
-    id: 'SETU-2846',
-    category: 'food',
-    title: 'Food quality concerns in mess',
-    description: 'Students have been reporting poor food quality in the mess for the past week. Several students fell ill after meals on Tuesday and Wednesday.',
-    status: 'resolved_pending',
-    urgencyScore: 72,
-    submittedDaysAgo: 1,
-    submittedBy: 'Lakshmi Devi',
-    reportedByName: 'Lakshmi Devi',
-    isEndorsed: true,
-    resolvedAt: new Date(Date.now() - 20 * 60 * 60 * 1000).toISOString(), // 20 hours ago
-    timeline: [
-      { id: '1', actorRole: 'Block Official', action: 'Marked as resolved - new mess vendor assigned', timestamp: '20 hours ago' },
-      { id: '2', actorRole: 'Principal', action: 'Endorsed this issue', timestamp: '1 day ago', isInternalEscalation: true },
-      { id: '3', actorRole: 'Block Official', action: 'Assigned to mess supervisor for investigation', timestamp: '1 day ago' },
-      { id: '4', actorRole: 'School Staff', action: 'Issue submitted', timestamp: '5 days ago' },
-    ],
-  },
-};
-
-const DEFAULT_ISSUE = MOCK_ISSUES['SETU-2847'];
-
-// ─────────────────────────────────────────────────────────────────────────────
+import { useIssue, endorseIssue, withdrawEndorsement } from '../hooks/useIssues';
+import { useIssueAuditLog, formatAuditEntry, addAuditLogEntry } from '../hooks/useIssueAuditLog';
+import { useCurrentUser } from '../hooks/useCurrentUser';
+import { useIssueComments } from '../hooks/useIssueComments';
+import { fileDispute } from '../hooks/useDisputes';
+import { submitAnonymousReport } from '../hooks/useAnonymousReports';
 
 // Category icons mapping
 const getCategoryIcon = (category: string) => {
   const iconMap: { [key: string]: string } = {
-    infrastructure: '🏗️',
-    health: '⚕️',
-    food: '🍽️',
+    water: '💧',
+    electricity: '⚡',
+    building: '🏗️',
     safety: '🛡️',
-    academics: '📚',
-    utilities: '💡',
+    finance: '💰',
+    other: '📋',
   };
   return iconMap[category.toLowerCase()] || '📋';
 };
@@ -111,85 +41,111 @@ const getUrgencyColor = (score: number) => {
   return { bg: '#F3F4F6', text: '#6B7280', border: '#9CA3AF' }; // Gray
 };
 
-// Status chip configuration
-const getStatusConfig = (status: string) => {
-  const configs: { [key: string]: { bg: string; text: string } } = {
-    'submitted': { bg: '#EEF2FF', text: '#4F46E5' },
-    'acknowledged': { bg: '#DBEAFE', text: '#2563EB' },
-    'in_progress': { bg: '#FEF3C7', text: '#D97706' },
-    'resolved_pending': { bg: '#D1FAE5', text: '#059669' },
-    'resolved_confirmed': { bg: '#059669', text: '#FFFFFF' },
-    'escalated_l1': { bg: '#DBEAFE', text: '#2563EB' },
-    'escalated_l2': { bg: '#FEF3C7', text: '#D97706' },
-    'escalated_l3': { bg: '#FED7AA', text: '#EA580C' },
-    'escalated_l4': { bg: '#FEE2E2', text: '#DC2626' },
-  };
-  return configs[status] || configs['submitted'];
+// Get days ago from timestamp
+const getDaysAgo = (timestamp: string): number => {
+  const now = Date.now();
+  const diff = now - new Date(timestamp).getTime();
+  return Math.floor(diff / 86400000);
 };
 
-// Format status for display
-const formatStatus = (status: string) => {
-  const statusMap: { [key: string]: string } = {
-    'submitted': 'Submitted',
-    'acknowledged': 'Acknowledged',
-    'in_progress': 'In Progress',
-    'resolved_pending': 'Resolved (Pending Confirmation)',
-    'resolved_confirmed': 'Resolved & Confirmed',
-    'escalated_l1': 'Escalated - L1',
-    'escalated_l2': 'Escalated - L2',
-    'escalated_l3': 'Escalated - L3',
-    'escalated_l4': 'Escalated - L4',
-  };
-  return statusMap[status] || status;
+// Get escalation level from current_level string
+const getEscalationLevel = (currentLevel: string): number => {
+  return parseInt(currentLevel.substring(1)); // 'L0' -> 0, 'L2' -> 2, etc.
 };
 
 export function IssueDetailPrincipal() {
   const { issueId } = useParams<{ issueId: string }>();
   const navigate = useNavigate();
-  const issueData = (issueId && MOCK_ISSUES[issueId]) ? MOCK_ISSUES[issueId] : DEFAULT_ISSUE;
+  const { user } = useCurrentUser();
+  const { issue, loading: issueLoading, error: issueError, refetch } = useIssue(issueId || '', true); // true = search by SETU ID
+  const { entries: auditEntries, loading: auditLoading, refetch: refetchAudit } = useIssueAuditLog(issue?.id || '');
+  const { comments, loading: commentsLoading, addComment } = useIssueComments(issue?.id || '');
 
   const [showFullHistory, setShowFullHistory] = useState(false);
   const [commentExpanded, setCommentExpanded] = useState(false);
   const [commentText, setCommentText] = useState('');
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [audioProgress, setAudioProgress] = useState(0);
   const [isDisputeModalOpen, setIsDisputeModalOpen] = useState(false);
   const [isAnonymousBypassModalOpen, setIsAnonymousBypassModalOpen] = useState(false);
   const [isEscalationSheetOpen, setIsEscalationSheetOpen] = useState(false);
-  const [isWithdrawEndorsementModalOpen, setIsWithdrawEndorsementModalOpen] = useState(false);
-  const [isEndorseIssueModalOpen, setIsEndorseIssueModalOpen] = useState(false);
+  const [isEndorseModalOpen, setIsEndorseModalOpen] = useState(false);
+  const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
-  const [isEndorsed, setIsEndorsed] = useState(issueData.isEndorsed);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [isEndorsing, setIsEndorsing] = useState(false);
   const commentInputRef = useRef<HTMLTextAreaElement | null>(null);
 
-  const categoryIcon = getCategoryIcon(issueData.category);
-  const urgencyColors = getUrgencyColor(issueData.urgencyScore);
-  const statusConfig = getStatusConfig(issueData.status);
-  const isPulsing = issueData.urgencyScore >= 100;
+  // Loading state
+  if (issueLoading || auditLoading || commentsLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#F8F9FA]">
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+          style={{
+            width: '40px',
+            height: '40px',
+            border: '4px solid #F0A500',
+            borderTopColor: 'transparent',
+            borderRadius: '50%',
+          }}
+        />
+      </div>
+    );
+  }
 
-  // Calculate dispute window (72 hours from resolution)
-  const isDisputeWindowOpen = issueData.status === 'resolved_pending';
-  const [timeRemaining, setTimeRemaining] = useState(() => {
-    if (issueData.resolvedAt) {
-      const resolvedTime = new Date(issueData.resolvedAt).getTime();
-      const now = Date.now();
-      const elapsed = now - resolvedTime;
-      const totalWindow = 72 * 60 * 60 * 1000; // 72 hours in ms
-      const remaining = Math.max(0, totalWindow - elapsed);
-      return Math.floor(remaining / 1000); // Convert to seconds
-    }
-    return 72 * 60 * 60; // Default 72 hours
-  });
+  // Error or not found
+  if (issueError || !issue) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#F8F9FA] px-4">
+        <div style={{ fontSize: '64px', marginBottom: '16px' }}>❌</div>
+        <h2 style={{ fontFamily: 'Noto Sans', fontSize: '20px', fontWeight: 700, color: '#0D1B2A', marginBottom: '8px' }}>
+          Issue Not Found
+        </h2>
+        <p style={{ fontFamily: 'Noto Sans', fontSize: '14px', color: '#6B7280', marginBottom: '24px', textAlign: 'center' }}>
+          The issue you're looking for doesn't exist or you don't have permission to view it.
+        </p>
+        <button
+          onClick={() => navigate('/principal/dashboard')}
+          style={{
+            backgroundColor: '#0D1B2A',
+            color: 'white',
+            border: 'none',
+            borderRadius: '8px',
+            padding: '12px 24px',
+            fontFamily: 'Noto Sans',
+            fontSize: '15px',
+            fontWeight: 600,
+            cursor: 'pointer',
+          }}
+        >
+          Go Back
+        </button>
+      </div>
+    );
+  }
+
+  const categoryIcon = getCategoryIcon(issue.category);
+  const urgencyColors = getUrgencyColor(issue.ai_urgency_score);
+  const submittedBy = issue.reporter?.full_name || 'Unknown'; // Changed from creator to reporter
+  const isOwnIssue = issue.reported_by === user?.id; // Changed from created_by to reported_by
+
+  // Calculate dispute deadline (72 hours from resolved_at)
+  const isDisputeWindowOpen = issue.status === 'resolved' && issue.resolved_at;
+  const [timeRemaining, setTimeRemaining] = useState(72 * 60 * 60); // 72 hours in seconds
 
   useEffect(() => {
-    if (isDisputeWindowOpen && timeRemaining > 0) {
-      const interval = setInterval(() => {
-        setTimeRemaining((prev) => Math.max(0, prev - 1));
-      }, 1000);
+    if (isDisputeWindowOpen && issue.resolved_at) {
+      const resolvedTime = new Date(issue.resolved_at).getTime();
+      const deadline = resolvedTime + (72 * 60 * 60 * 1000);
+      const updateTimer = () => {
+        const now = Date.now();
+        const remaining = Math.max(0, Math.floor((deadline - now) / 1000));
+        setTimeRemaining(remaining);
+      };
+      updateTimer();
+      const interval = setInterval(updateTimer, 1000);
       return () => clearInterval(interval);
     }
-  }, [isDisputeWindowOpen, timeRemaining]);
+  }, [isDisputeWindowOpen, issue.resolved_at]);
 
   const formatTimeRemaining = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
@@ -199,20 +155,14 @@ export function IssueDetailPrincipal() {
 
   const handleShare = () => {
     if (navigator.share) {
-      navigator.share({ title: `Issue ${issueData.id}`, text: `${issueData.title}`, url: window.location.href });
+      navigator.share({
+        title: `Issue ${issue.setu_id}`,
+        text: issue.title,
+        url: window.location.href,
+      });
     } else {
-      alert('Share — Issue ID: ' + issueData.id);
-    }
-  };
-
-  const handlePlayPause = () => {
-    if (audioRef.current) {
-      if (isPlaying) {
-        audioRef.current.pause();
-      } else {
-        audioRef.current.play();
-      }
-      setIsPlaying(!isPlaying);
+      navigator.clipboard.writeText(window.location.href);
+      setToastMessage('Link copied to clipboard');
     }
   };
 
@@ -225,9 +175,86 @@ export function IssueDetailPrincipal() {
 
   const handleSubmitComment = () => {
     if (commentText.trim()) {
-      alert('Comment submitted: ' + commentText);
+      // Submit comment to Supabase
+      addComment(commentText);
+      setToastMessage('Comment added successfully');
       setCommentText('');
       setCommentExpanded(false);
+    }
+  };
+
+  const handleEndorse = () => {
+    setIsEndorseModalOpen(true);
+  };
+
+  const handleEndorseConfirm = async (note: string) => {
+    if (!user?.id || !issue.id) return;
+
+    setIsEndorsing(true);
+    try {
+      // Endorse the issue
+      const result = await endorseIssue(issue.id, user.id);
+      
+      if (result.success) {
+        // Add audit log entry
+        await addAuditLogEntry({
+          issue_id: issue.id,
+          actor_id: user.id,
+          action_type: 'endorsed',
+          note: note || 'Principal endorsed this issue as urgent',
+          metadata: { ai_urgency_score: issue.ai_urgency_score },
+        });
+
+        // Refresh data
+        await refetch();
+        await refetchAudit();
+
+        setToastMessage('Issue endorsed successfully');
+        setIsEndorseModalOpen(false);
+      } else {
+        setToastMessage('Failed to endorse issue');
+      }
+    } catch (error) {
+      console.error('Error endorsing issue:', error);
+      setToastMessage('An error occurred while endorsing');
+    } finally {
+      setIsEndorsing(false);
+    }
+  };
+
+  const handleWithdrawEndorsement = () => {
+    setIsWithdrawModalOpen(true);
+  };
+
+  const handleWithdrawConfirm = async (reason: string) => {
+    if (!user?.id || !issue.id) return;
+
+    try {
+      // Implement withdraw endorsement in Supabase
+      const result = await withdrawEndorsement(issue.id);
+      
+      if (result.success) {
+        // Add audit log entry
+        await addAuditLogEntry({
+          issue_id: issue.id,
+          actor_id: user.id,
+          action_type: 'commented', // Using 'commented' as closest action_type
+          note: `Endorsement withdrawn: ${reason || 'No reason provided'}`,
+          metadata: { action: 'withdraw_endorsement' },
+        });
+
+        // Refresh data
+        await refetch();
+        await refetchAudit();
+
+        setToastMessage('Endorsement withdrawn');
+        setIsWithdrawModalOpen(false);
+      } else {
+        setToastMessage('Failed to withdraw endorsement');
+      }
+    } catch (error) {
+      console.error('Error withdrawing endorsement:', error);
+      setToastMessage('Failed to withdraw endorsement');
     }
   };
 
@@ -236,10 +263,9 @@ export function IssueDetailPrincipal() {
   };
 
   const handleDisputeSubmit = (reason: string, evidencePhoto?: File) => {
-    console.log('Dispute submitted:', reason, evidencePhoto);
-    alert(
-      `Dispute submitted!\n\nReason: ${reason}\n\nStatus changed to "Dispute Filed". Both school and official have been notified.`
-    );
+    // Submit dispute to Supabase
+    fileDispute(issue.id, reason, evidencePhoto);
+    setToastMessage('Dispute filed successfully');
     setIsDisputeModalOpen(false);
   };
 
@@ -248,73 +274,45 @@ export function IssueDetailPrincipal() {
   };
 
   const handleAnonymousBypassSubmit = (report: string) => {
-    console.log('Anonymous bypass report:', report);
+    // Submit anonymous report to Supabase
+    submitAnonymousReport(issue.id, report);
     setToastMessage('Report sent securely to state officials.');
     setIsAnonymousBypassModalOpen(false);
   };
 
   const handleDownloadPDF = () => {
-    alert('Downloading Issue PDF...');
+    setToastMessage('Generating PDF...');
+    // Generate and download PDF
   };
 
-  const handleEndorse = () => {
-    if (isEndorsed) {
-      // Already endorsed - show withdraw modal
-      setIsWithdrawEndorsementModalOpen(true);
-    } else {
-      // Show endorse modal
-      setIsEndorseIssueModalOpen(true);
-    }
-  };
+  // Check if escalation is L2 or higher
+  const escalationLevel = getEscalationLevel(issue.current_level);
+  const isL2OrHigher = escalationLevel >= 2;
 
-  const handleEndorseConfirm = (note?: string) => {
-    // In production, this would submit to Supabase
-    console.log('Issue endorsed with note:', note);
-    
-    // Set endorsed state
-    setIsEndorsed(true);
-    
-    // Close modal
-    setIsEndorseIssueModalOpen(false);
-    
-    // Show success toast
-    setToastMessage('Issue endorsed.');
-    
-    // In production, this would:
-    // - Add endorsement flag to issue in database
-    // - Add audit entry: "Endorsed by Principal [Name]"
-    // - Add gold star badge to card
-    // - Notify district officials
-    // - Update issue priority/visibility
-  };
-
-  const handleWithdrawEndorsement = (reason: string) => {
-    // In production, this would submit to Supabase
-    console.log('Endorsement withdrawn with reason:', reason);
-    
-    // Remove endorsed state
-    setIsEndorsed(false);
-    
-    // Close modal
-    setIsWithdrawEndorsementModalOpen(false);
-    
-    // Show success toast
-    setToastMessage('Endorsement withdrawn');
-    
-    // In production, this would:
-    // - Remove endorsement flag from issue in database
-    // - Add audit entry: "Withdrawn endorsement by Principal [Name] - Reason: [reason]"
-    // - Remove gold star badge from card
-    // - Notify district officials that endorsement is no longer active
-    // - Update issue priority/visibility
-  };
+  // Format audit entries for TimelineAuditLog component
+  const timelineEntries: AuditLogEntry[] = auditEntries.map(entry => {
+    const formatted = formatAuditEntry(entry);
+    return {
+      id: entry.id,
+      actorRole: formatted.actorRole,
+      action: formatted.action,
+      timestamp: formatted.timestamp,
+      isSystemAction: formatted.isSystemAction,
+      isInternalEscalation: formatted.isInternalEscalation,
+    };
+  });
 
   const displayedTimeline = showFullHistory
-    ? issueData.timeline
-    : issueData.timeline.slice(0, 5);
+    ? timelineEntries
+    : timelineEntries.slice(0, 5);
+
+  // Check if already endorsed by current principal
+  const isEndorsedByMe = issue.is_endorsed && issue.endorsed_by === user?.id;
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F8F9FA]">
+      <OfflineBanner />
+
       {/* App Bar - Navy 56px */}
       <div
         className="flex items-center justify-between px-4 bg-[#0D1B2A] sticky top-0 z-20"
@@ -337,7 +335,7 @@ export function IssueDetailPrincipal() {
           }}
           data-i18n="lbl_issue_id_appbar"
         >
-          {issueData.id}
+          {issue.setu_id}
         </h1>
         <div className="flex items-center gap-2">
           <button
@@ -382,47 +380,12 @@ export function IssueDetailPrincipal() {
                   textTransform: 'capitalize',
                 }}
               >
-                {issueData.category}
+                {issue.category}
               </span>
             </div>
 
             {/* AI Urgency Score Badge */}
-            <motion.div
-              className="px-3 py-1.5"
-              style={{
-                backgroundColor: urgencyColors.bg,
-                borderRadius: '16px',
-                border: `1px solid ${urgencyColors.border}`,
-              }}
-              animate={
-                isPulsing
-                  ? {
-                      scale: [1, 1.05, 1],
-                      opacity: [1, 0.9, 1],
-                    }
-                  : {}
-              }
-              transition={
-                isPulsing
-                  ? {
-                      duration: 2,
-                      repeat: Infinity,
-                      ease: 'easeInOut',
-                    }
-                  : {}
-              }
-            >
-              <span
-                style={{
-                  fontFamily: 'Noto Sans',
-                  fontSize: '14px',
-                  fontWeight: 700,
-                  color: urgencyColors.text,
-                }}
-              >
-                {issueData.urgencyScore}
-              </span>
-            </motion.div>
+            <AIUrgencyScoreBadgeLarge score={issue.ai_urgency_score} />
           </div>
 
           {/* Row 2: Issue Title */}
@@ -436,24 +399,59 @@ export function IssueDetailPrincipal() {
               lineHeight: '1.3',
             }}
           >
-            {issueData.title}
+            {issue.title}
           </h2>
 
-          {/* Row 3: Status Chip + Info Button */}
-          <div className="mb-2 flex items-center gap-2">
+          {/* Row 3: Status + Escalation Chips + Endorsed Badge */}
+          <div className="mb-2 flex items-center gap-2 flex-wrap">
             <span
               className="inline-block px-3 py-1.5"
               style={{
-                backgroundColor: statusConfig.bg,
-                color: statusConfig.text,
+                backgroundColor: issue.status === 'resolved' ? '#D1FAE5' : issue.status === 'closed' ? '#E5E7EB' : '#FEF3C7',
+                color: issue.status === 'resolved' ? '#059669' : issue.status === 'closed' ? '#6B7280' : '#D97706',
                 borderRadius: '16px',
                 fontFamily: 'Noto Sans',
                 fontSize: '13px',
                 fontWeight: 600,
+                textTransform: 'capitalize',
               }}
             >
-              {formatStatus(issueData.status)}
+              {issue.status}
             </span>
+
+            {escalationLevel > 0 && (
+              <span
+                className="inline-block px-3 py-1.5"
+                style={{
+                  backgroundColor: escalationLevel >= 3 ? '#FEE2E2' : escalationLevel >= 2 ? '#FEF3C7' : '#DBEAFE',
+                  color: escalationLevel >= 3 ? '#DC2626' : escalationLevel >= 2 ? '#D97706' : '#2563EB',
+                  borderRadius: '16px',
+                  fontFamily: 'Noto Sans',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                }}
+              >
+                L{escalationLevel}
+              </span>
+            )}
+
+            {issue.is_endorsed && (
+              <span
+                className="inline-flex items-center gap-1 px-3 py-1.5"
+                style={{
+                  backgroundColor: '#FEF3C7',
+                  color: '#92400E',
+                  borderRadius: '16px',
+                  fontFamily: 'Noto Sans',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                }}
+              >
+                <ThumbsUp size={12} fill="#92400E" />
+                Endorsed
+              </span>
+            )}
+
             <button
               onClick={() => setIsEscalationSheetOpen(true)}
               className="min-w-[32px] min-h-[32px] flex items-center justify-center"
@@ -469,23 +467,7 @@ export function IssueDetailPrincipal() {
             </button>
           </div>
 
-          {/* Row 4: Reported By Metadata (Principal-specific) */}
-          <p
-            className="mb-2"
-            style={{
-              fontFamily: 'Noto Sans',
-              fontSize: '12px',
-              color: '#6B7280',
-              fontStyle: 'italic',
-            }}
-          >
-            <span data-i18n="lbl_reported_by">Reported by:</span>{' '}
-            <span style={{ fontWeight: 600, color: '#0D1B2A' }}>
-              {issueData.reportedByName}
-            </span>
-          </p>
-
-          {/* Row 5: Submission Meta */}
+          {/* Row 4: Submission Meta */}
           <p
             className="mb-4"
             style={{
@@ -493,487 +475,324 @@ export function IssueDetailPrincipal() {
               fontSize: '11px',
               color: '#6B7280',
             }}
+            data-i18n="lbl_submission_meta"
           >
-            Submitted {issueData.submittedDaysAgo} {issueData.submittedDaysAgo === 1 ? 'day' : 'days'} ago
+            Submitted {getDaysAgo(issue.created_at)} days ago • By: {submittedBy}
           </p>
 
           {/* Divider */}
-          <div
-            className="mb-4"
-            style={{ height: '1px', backgroundColor: '#E5E7EB' }}
-          />
+          <div className="my-4" style={{ height: '1px', backgroundColor: '#E5E7EB' }} />
 
-          {/* Issue Description */}
-          <p
-            style={{
-              fontFamily: 'Noto Sans',
-              fontSize: '14px',
-              color: '#4B5563',
-              lineHeight: '1.6',
-            }}
-          >
-            {issueData.description}
-          </p>
-
-          {/* Evidence Photo (if exists) */}
-          {issueData.photo && (
-            <div className="mt-4">
+          {/* Photo Thumbnail */}
+          {issue.photo_url && (
+            <div className="mb-4">
               <img
-                src={issueData.photo}
-                alt="Issue evidence"
+                src={issue.photo_url}
+                alt="Issue"
                 style={{
                   width: '100%',
-                  borderRadius: '8px',
-                  maxHeight: '240px',
+                  maxHeight: '200px',
                   objectFit: 'cover',
+                  borderRadius: '8px',
                 }}
               />
             </div>
           )}
 
-          {/* Voice Note Player (if exists) */}
-          {issueData.voiceNote && (
-            <div
-              className="mt-4 flex items-center gap-3 p-3"
-              style={{
-                backgroundColor: '#F3F4F6',
-                borderRadius: '8px',
-              }}
-            >
-              <button
-                onClick={handlePlayPause}
-                className="min-w-[40px] min-h-[40px] flex items-center justify-center"
-                style={{
-                  backgroundColor: '#0D1B2A',
-                  borderRadius: '50%',
-                  border: 'none',
-                  cursor: 'pointer',
-                }}
-              >
-                {isPlaying ? <Pause size={18} color="white" /> : <Play size={18} color="white" />}
-              </button>
-              <div className="flex-1">
-                <div
-                  style={{
-                    height: '4px',
-                    backgroundColor: '#D1D5DB',
-                    borderRadius: '2px',
-                    overflow: 'hidden',
-                  }}
-                >
-                  <div
-                    style={{
-                      height: '100%',
-                      width: `${audioProgress}%`,
-                      backgroundColor: '#F0A500',
-                    }}
-                  />
-                </div>
-                <p
-                  className="mt-1"
-                  style={{
-                    fontFamily: 'Noto Sans',
-                    fontSize: '11px',
-                    color: '#6B7280',
-                  }}
-                >
-                  {issueData.voiceNote.duration}s
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Action Panel - Principal-specific */}
-        <div
-          className="bg-white mx-4 mt-4"
-          style={{
-            borderRadius: '8px',
-            padding: '16px',
-            border: '1px solid #E5E7EB',
-            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)',
-          }}
-        >
-          <h3
-            className="mb-3"
+          {/* Description */}
+          <p
             style={{
               fontFamily: 'Noto Sans',
               fontSize: '14px',
-              fontWeight: 700,
               color: '#0D1B2A',
+              lineHeight: '1.6',
             }}
-            data-i18n="lbl_actions"
           >
-            Actions
-          </h3>
+            {issue.description}
+          </p>
 
-          {/* Endorse Button */}
-          <motion.button
-            whileHover={{ scale: 1.01 }}
-            whileTap={{ scale: 0.99 }}
-            onClick={handleEndorse}
-            className="w-full flex items-center justify-center gap-2 mb-3"
-            style={{
-              minHeight: '48px',
-              backgroundColor: 'white',
-              border: `2px solid ${isEndorsed ? '#10B981' : '#0D1B2A'}`,
-              borderRadius: '8px',
-              color: isEndorsed ? '#10B981' : '#0D1B2A',
-              fontFamily: 'Noto Sans',
-              fontSize: '15px',
-              fontWeight: 600,
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-            }}
-            data-i18n={isEndorsed ? 'btn_endorsed' : 'btn_endorse'}
-          >
-            {isEndorsed ? (
-              <>
-                <Check size={20} />
-                <span>Endorsed ✓</span>
-              </>
-            ) : (
-              <>
-                <ThumbsUp size={20} />
-                <span>Endorse This Issue</span>
-              </>
-            )}
-          </motion.button>
+          {/* Divider */}
+          <div className="my-4" style={{ height: '1px', backgroundColor: '#E5E7EB' }} />
 
-          {/* Dispute Resolution Button (if resolved within 72h) */}
-          {isDisputeWindowOpen && timeRemaining > 0 && (
-            <motion.button
-              whileHover={{ scale: 1.01 }}
-              whileTap={{ scale: 0.99 }}
-              onClick={handleDispute}
-              className="w-full mb-3"
+          {/* Timeline Section */}
+          <div>
+            <h3
+              className="mb-4"
               style={{
-                minHeight: '48px',
-                backgroundColor: '#FEF3C7',
-                border: '2px solid #F59E0B',
-                borderRadius: '8px',
-                color: '#92400E',
                 fontFamily: 'Noto Sans',
-                fontSize: '15px',
-                fontWeight: 600,
-                cursor: 'pointer',
+                fontSize: '16px',
+                fontWeight: 700,
+                color: '#0D1B2A',
               }}
+              data-i18n="lbl_timeline"
             >
-              <div className="flex items-center justify-center gap-2">
-                <Shield size={20} />
-                <span data-i18n="btn_dispute_resolution">Dispute Resolution</span>
-              </div>
-              <p
-                style={{
-                  fontFamily: 'Noto Sans',
-                  fontSize: '11px',
-                  color: '#92400E',
-                  marginTop: '4px',
-                }}
-              >
-                {formatTimeRemaining(timeRemaining)}
-              </p>
-            </motion.button>
-          )}
+              Timeline / Updates
+            </h3>
 
-          {/* Download PDF */}
-          <button
-            onClick={handleDownloadPDF}
-            className="w-full flex items-center justify-center gap-2 mb-3"
-            style={{
-              minHeight: '48px',
-              backgroundColor: 'white',
-              border: '1.5px solid #E5E7EB',
-              borderRadius: '8px',
-              color: '#6B7280',
-              fontFamily: 'Noto Sans',
-              fontSize: '15px',
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
-            data-i18n="btn_download_pdf"
-          >
-            <Download size={20} />
-            <span>Download PDF Report</span>
-          </button>
+            {/* Timeline Entries */}
+            <TimelineAuditLog
+              entries={displayedTimeline}
+              showFullHistory={showFullHistory}
+              onToggleHistory={() => setShowFullHistory(!showFullHistory)}
+            />
+          </div>
 
-          {/* Anonymous Bypass - Principal-specific label */}
-          <button
-            onClick={handleAnonymousBypass}
-            className="w-full flex items-center justify-center gap-2"
-            style={{
-              minHeight: '48px',
-              backgroundColor: 'transparent',
-              border: 'none',
-              color: '#9CA3AF',
-              fontFamily: 'Noto Sans',
-              fontSize: '13px',
-              fontWeight: 600,
-              cursor: 'pointer',
-              textDecoration: 'underline',
-            }}
-            data-i18n="btn_anon_escalate"
-          >
-            <Shield size={16} />
-            <span>Escalate Anonymously to State</span>
-          </button>
-        </div>
+          {/* Divider */}
+          <div className="my-4" style={{ height: '1px', backgroundColor: '#E5E7EB' }} />
 
-        {/* Comment Section */}
-        <div
-          className="bg-white mx-4 mt-4"
-          style={{
-            borderRadius: '8px',
-            padding: '16px',
-            border: '1px solid #E5E7EB',
-            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)',
-          }}
-        >
-          <h3
-            className="mb-3"
-            style={{
-              fontFamily: 'Noto Sans',
-              fontSize: '14px',
-              fontWeight: 700,
-              color: '#0D1B2A',
-            }}
-            data-i18n="lbl_add_comment"
-          >
-            Add Comment
-          </h3>
-
-          <textarea
-            ref={commentInputRef}
-            value={commentText}
-            onChange={(e) => setCommentText(e.target.value)}
-            onFocus={handleCommentFocus}
-            placeholder="Add an internal note or update..."
-            data-i18n="placeholder_comment"
-            style={{
-              width: '100%',
-              minHeight: commentExpanded ? '96px' : '48px',
-              padding: '12px',
-              borderRadius: '8px',
-              border: '1px solid #E5E7EB',
-              fontFamily: 'Noto Sans',
-              fontSize: '14px',
-              color: '#0D1B2A',
-              resize: 'vertical',
-              outline: 'none',
-              transition: 'min-height 0.2s',
-            }}
-          />
-
-          {commentExpanded && (
-            <div className="flex justify-end gap-2 mt-2">
+          {/* Add Comment Area */}
+          <div>
+            {!commentExpanded ? (
               <button
-                onClick={() => {
-                  setCommentExpanded(false);
-                  setCommentText('');
-                }}
+                onClick={handleCommentFocus}
+                className="w-full text-left px-4 py-3"
                 style={{
-                  padding: '8px 16px',
-                  backgroundColor: 'white',
+                  backgroundColor: 'transparent',
                   border: '1px solid #E5E7EB',
                   borderRadius: '8px',
                   fontFamily: 'Noto Sans',
                   fontSize: '14px',
-                  fontWeight: 600,
-                  color: '#6B7280',
-                  cursor: 'pointer',
+                  color: '#9CA3AF',
+                  cursor: 'text',
                 }}
-                data-i18n="btn_cancel"
+                data-i18n="placeholder_add_comment"
               >
-                Cancel
+                Add a note...
               </button>
-              <button
-                onClick={handleSubmitComment}
-                disabled={!commentText.trim()}
-                style={{
-                  padding: '8px 16px',
-                  backgroundColor: commentText.trim() ? '#0D1B2A' : '#E5E7EB',
-                  border: 'none',
-                  borderRadius: '8px',
-                  fontFamily: 'Noto Sans',
-                  fontSize: '14px',
-                  fontWeight: 600,
-                  color: 'white',
-                  cursor: commentText.trim() ? 'pointer' : 'not-allowed',
-                }}
-                data-i18n="btn_submit"
-              >
-                Submit
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Timeline - All entries visible including internal escalation logs */}
-        <div
-          className="bg-white mx-4 mt-4"
-          style={{
-            borderRadius: '8px',
-            padding: '16px',
-            border: '1px solid #E5E7EB',
-            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)',
-          }}
-        >
-          <h3
-            className="mb-4"
-            style={{
-              fontFamily: 'Noto Sans',
-              fontSize: '14px',
-              fontWeight: 700,
-              color: '#0D1B2A',
-            }}
-            data-i18n="lbl_activity_timeline"
-          >
-            Activity Timeline
-          </h3>
-
-          <div className="space-y-4">
-            {displayedTimeline.map((entry, index) => (
-              <div key={entry.id} className="flex gap-3">
-                {/* Timeline dot */}
-                <div className="flex flex-col items-center">
-                  <div
-                    style={{
-                      width: '12px',
-                      height: '12px',
-                      borderRadius: '50%',
-                      backgroundColor: entry.isSystemAction ? '#F0A500' : 
-                                      entry.isInternalEscalation ? '#10B981' : '#0D1B2A',
-                      marginTop: '4px',
-                    }}
-                  />
-                  {index < displayedTimeline.length - 1 && (
-                    <div
-                      style={{
-                        width: '2px',
-                        flex: 1,
-                        minHeight: '24px',
-                        backgroundColor: '#E5E7EB',
-                      }}
-                    />
-                  )}
-                </div>
-
-                {/* Timeline content */}
-                <div className="flex-1 pb-2">
-                  <p
-                    style={{
-                      fontFamily: 'Noto Sans',
-                      fontSize: '13px',
-                      fontWeight: 600,
-                      color: entry.isSystemAction ? '#F59E0B' : 
-                             entry.isInternalEscalation ? '#10B981' : '#0D1B2A',
-                      marginBottom: '2px',
-                    }}
-                  >
-                    {entry.actorRole}
-                    {entry.isInternalEscalation && (
-                      <span
-                        style={{
-                          marginLeft: '6px',
-                          fontSize: '10px',
-                          fontWeight: 700,
-                          color: '#10B981',
-                          backgroundColor: '#D1FAE5',
-                          padding: '2px 6px',
-                          borderRadius: '4px',
-                        }}
-                      >
-                        INTERNAL
-                      </span>
-                    )}
-                  </p>
-                  <p
-                    style={{
-                      fontFamily: 'Noto Sans',
-                      fontSize: '13px',
-                      color: '#4B5563',
-                      marginBottom: '4px',
-                    }}
-                  >
-                    {entry.action}
-                  </p>
-                  <p
+            ) : (
+              <div>
+                <textarea
+                  ref={commentInputRef}
+                  value={commentText}
+                  onChange={(e) => setCommentText(e.target.value.slice(0, 500))}
+                  maxLength={500}
+                  placeholder="Add a note..."
+                  className="w-full px-4 py-3 mb-2"
+                  style={{
+                    backgroundColor: 'white',
+                    border: '1px solid #E5E7EB',
+                    borderRadius: '8px',
+                    fontFamily: 'Noto Sans',
+                    fontSize: '14px',
+                    color: '#0D1B2A',
+                    minHeight: '100px',
+                    resize: 'vertical',
+                  }}
+                  data-i18n="placeholder_add_comment"
+                />
+                <div className="flex items-center justify-between">
+                  <span
                     style={{
                       fontFamily: 'Noto Sans',
                       fontSize: '11px',
                       color: '#9CA3AF',
                     }}
                   >
-                    {entry.timestamp}
-                  </p>
+                    {commentText.length}/500
+                  </span>
+                  <button
+                    onClick={handleSubmitComment}
+                    disabled={!commentText.trim()}
+                    className="px-4 py-2"
+                    style={{
+                      backgroundColor: 'transparent',
+                      border: '1px solid #0D1B2A',
+                      borderRadius: '8px',
+                      fontFamily: 'Noto Sans',
+                      fontSize: '14px',
+                      fontWeight: 600,
+                      color: '#0D1B2A',
+                      cursor: commentText.trim() ? 'pointer' : 'not-allowed',
+                      opacity: commentText.trim() ? 1 : 0.5,
+                    }}
+                  >
+                    Submit Comment
+                  </button>
                 </div>
               </div>
-            ))}
+            )}
           </div>
-
-          {issueData.timeline.length > 5 && !showFullHistory && (
-            <button
-              onClick={() => setShowFullHistory(true)}
-              className="mt-4 w-full"
-              style={{
-                padding: '8px',
-                backgroundColor: 'transparent',
-                border: 'none',
-                color: '#F0A500',
-                fontFamily: 'Noto Sans',
-                fontSize: '13px',
-                fontWeight: 600,
-                cursor: 'pointer',
-                textDecoration: 'underline',
-              }}
-              data-i18n="btn_show_full_history"
-            >
-              Show Full History ({issueData.timeline.length} entries)
-            </button>
-          )}
         </div>
+
+        {/* Download PDF Link */}
+        <button
+          onClick={handleDownloadPDF}
+          className="flex items-center justify-center gap-2 mx-4 mt-4"
+          style={{
+            background: 'none',
+            border: 'none',
+            fontFamily: 'Noto Sans',
+            fontSize: '14px',
+            fontWeight: 600,
+            color: '#F0A500',
+            cursor: 'pointer',
+            padding: '12px',
+          }}
+          data-i18n="lnk_download_pdf"
+        >
+          <Download size={16} color="#F0A500" />
+          Download Issue PDF
+        </button>
       </main>
 
-      {/* Modals */}
+      {/* Principal Actions - Floating Bottom Bar */}
+      <div
+        className="sticky bottom-0 left-0 right-0 bg-white border-t border-[#E5E7EB] px-4 py-3"
+        style={{
+          boxShadow: '0 -2px 8px rgba(0, 0, 0, 0.08)',
+        }}
+      >
+        {isEndorsedByMe ? (
+          /* Already Endorsed - Show Withdraw Button */
+          <div className="flex items-center gap-3">
+            <div
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-3"
+              style={{
+                backgroundColor: '#FEF3C7',
+                borderRadius: '8px',
+                border: '1px solid #F0A500',
+              }}
+            >
+              <Check size={18} color="#92400E" />
+              <span
+                style={{
+                  fontFamily: 'Noto Sans',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  color: '#92400E',
+                }}
+              >
+                Endorsed
+              </span>
+            </div>
+            <button
+              onClick={handleWithdrawEndorsement}
+              style={{
+                height: '48px',
+                paddingLeft: '16px',
+                paddingRight: '16px',
+                borderRadius: '8px',
+                backgroundColor: 'transparent',
+                border: '1px solid #DC2626',
+                color: '#DC2626',
+                fontFamily: 'Noto Sans',
+                fontSize: '14px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Withdraw
+            </button>
+          </div>
+        ) : (
+          /* Not Endorsed - Show Endorse Button */
+          <button
+            onClick={handleEndorse}
+            disabled={isEndorsing}
+            className="w-full flex items-center justify-center gap-2"
+            style={{
+              height: '48px',
+              borderRadius: '8px',
+              backgroundColor: '#F0A500',
+              border: 'none',
+              color: '#0D1B2A',
+              fontFamily: 'Noto Sans',
+              fontSize: '15px',
+              fontWeight: 600,
+              cursor: isEndorsing ? 'not-allowed' : 'pointer',
+              opacity: isEndorsing ? 0.6 : 1,
+            }}
+            data-i18n="btn_endorse_issue"
+          >
+            {isEndorsing ? (
+              'Endorsing...'
+            ) : (
+              <>
+                <ThumbsUp size={18} />
+                Endorse Issue
+              </>
+            )}
+          </button>
+        )}
+      </div>
+
+      {/* Anonymous Bypass Button - Only visible for L2 or higher escalations */}
+      {isL2OrHigher && (
+        <div className="mx-4 mt-4 mb-4">
+          <button
+            onClick={handleAnonymousBypass}
+            className="w-full flex items-center justify-center gap-2"
+            style={{
+              height: '48px',
+              borderRadius: '8px',
+              backgroundColor: 'transparent',
+              border: 'none',
+              color: '#6B7280',
+              fontFamily: 'Noto Sans',
+              fontSize: '14px',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+            data-i18n="btn_report_state"
+          >
+            <Shield size={18} color="#6B7280" />
+            Report to State Officials
+          </button>
+        </div>
+      )}
+
+      {/* Endorse Issue Modal */}
+      <EndorseIssueModal
+        isOpen={isEndorseModalOpen}
+        onClose={() => setIsEndorseModalOpen(false)}
+        onConfirm={handleEndorseConfirm}
+        issueTitle={issue.title}
+      />
+
+      {/* Withdraw Endorsement Modal */}
+      <WithdrawEndorsementModal
+        isOpen={isWithdrawModalOpen}
+        onClose={() => setIsWithdrawModalOpen(false)}
+        onConfirm={handleWithdrawConfirm}
+      />
+
+      {/* Dispute Resolution Modal */}
       <DisputeResolutionModal
         isOpen={isDisputeModalOpen}
         onClose={() => setIsDisputeModalOpen(false)}
         onSubmit={handleDisputeSubmit}
       />
 
+      {/* Anonymous Bypass Modal */}
       <AnonymousBypassModal
         isOpen={isAnonymousBypassModalOpen}
         onClose={() => setIsAnonymousBypassModalOpen(false)}
         onSubmit={handleAnonymousBypassSubmit}
       />
 
+      {/* Toast */}
+      <Toast
+        message={toastMessage}
+        isVisible={!!toastMessage}
+        onClose={() => setToastMessage('')}
+        type="success"
+      />
+
+      {/* Escalation Level Explainer Bottom Sheet */}
       <EscalationLevelBottomSheet
         isOpen={isEscalationSheetOpen}
         onClose={() => setIsEscalationSheetOpen(false)}
-        currentLevel={issueData.status.includes('escalated') 
-          ? (issueData.status.split('_')[1].toUpperCase() as 'L1' | 'L2' | 'L3' | 'L4')
-          : 'L0'}
+        currentLevel={escalationLevel}
+        onContactDEO={() => {
+          setIsEscalationSheetOpen(false);
+          setToastMessage('Contact: DEO - Ph: +91-xxx-xxx-xxxx');
+        }}
+        onViewFullHistory={() => {
+          setIsEscalationSheetOpen(false);
+          setShowFullHistory(true);
+        }}
       />
-
-      <WithdrawEndorsementModal
-        isOpen={isWithdrawEndorsementModalOpen}
-        onClose={() => setIsWithdrawEndorsementModalOpen(false)}
-        onConfirm={handleWithdrawEndorsement}
-      />
-
-      <EndorseIssueModal
-        isOpen={isEndorseIssueModalOpen}
-        onClose={() => setIsEndorseIssueModalOpen(false)}
-        onEndorse={handleEndorseConfirm}
-      />
-
-      {/* Toast Notification */}
-      {toastMessage && (
-        <Toast
-          message={toastMessage}
-          onClose={() => setToastMessage('')}
-        />
-      )}
     </div>
   );
 }
