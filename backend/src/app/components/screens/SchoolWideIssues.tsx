@@ -1,20 +1,24 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Plus, Search, X, ChevronDown } from 'lucide-react';
 import { LanguageToggle } from '../components/LanguageToggle';
+import { OfflineBanner } from '../components/OfflineBanner';
 import { StaffSelectorModal } from '../components/StaffSelectorModal';
-import { mockIssues, Issue } from '../data/mockIssues';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate, useLocation } from 'react-router';
 import { Building2, Utensils, BookOpen, Heart, AlertTriangle, Star } from 'lucide-react';
+import { useCurrentUser } from '../hooks/useCurrentUser';
+import { useIssues, Issue } from '../hooks/useIssues';
 
 type StatusFilter = 'all' | 'open' | 'pending' | 'resolved' | 'disputed';
 type SortOption = 'urgency' | 'date' | 'updated';
 
 const categoryIcons: Record<string, React.ReactNode> = {
-  Infrastructure: <Building2 size={24} color="#0D1B2A" />,
-  'Food & Nutrition': <Utensils size={24} color="#0D1B2A" />,
-  Academic: <BookOpen size={24} color="#0D1B2A" />,
-  'Health & Safety': <Heart size={24} color="#0D1B2A" />,
+  water: <Building2 size={24} color="#0D1B2A" />,
+  electricity: <Building2 size={24} color="#0D1B2A" />,
+  building: <Building2 size={24} color="#0D1B2A" />,
+  safety: <Heart size={24} color="#0D1B2A" />,
+  finance: <BookOpen size={24} color="#0D1B2A" />,
+  other: <AlertTriangle size={24} color="#0D1B2A" />,
 };
 
 const urgencyColors: Record<string, string> = {
@@ -51,22 +55,11 @@ function getTimeAgo(timestamp: string): string {
   return `${days} days ago`;
 }
 
-// Extended Issue type with reporter info
-interface SchoolIssue extends Issue {
-  reportedBy: string;
-  reportedByCurrentUser: boolean;
-  isEndorsed: boolean;
-  reporterStaffId: string;
+function getUrgencyLevel(score: number): 'critical' | 'high' | 'low' {
+  if (score >= 90) return 'critical';
+  if (score >= 60) return 'high';
+  return 'low';
 }
-
-// Mock data with reporter info
-const mockSchoolIssues: SchoolIssue[] = mockIssues.map((issue, idx) => ({
-  ...issue,
-  reportedBy: idx % 3 === 0 ? 'Ravi Kumar' : idx % 3 === 1 ? 'Lakshmi Devi' : 'Suresh Reddy',
-  reportedByCurrentUser: idx % 5 === 0,
-  isEndorsed: idx % 4 === 0,
-  reporterStaffId: String((idx % 8) + 1),
-}));
 
 export function SchoolWideIssues() {
   const navigate = useNavigate();
@@ -79,6 +72,15 @@ export function SchoolWideIssues() {
   const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  // Fetch current user and all issues from their school
+  const { user, loading: userLoading } = useCurrentUser();
+  const { issues, loading: issuesLoading, refetch } = useIssues({
+    schoolId: user?.school_id || undefined,
+    sortBy: sortBy === 'urgency' ? 'ai_urgency_score' : sortBy === 'date' ? 'created_at' : 'updated_at',
+  });
+
+  const loading = userLoading || issuesLoading;
+
   // Handle incoming filter from Staff Activity screen
   useEffect(() => {
     if (location.state && location.state.filterStaff) {
@@ -87,8 +89,9 @@ export function SchoolWideIssues() {
   }, [location.state]);
 
   // Filter and sort issues
-  const getFilteredIssues = (): SchoolIssue[] => {
-    let filtered = mockSchoolIssues;
+  const getFilteredIssues = (): Issue[] => {
+    if (!issues) return [];
+    let filtered = issues;
 
     // Apply search
     if (searchQuery.trim()) {
@@ -97,9 +100,9 @@ export function SchoolWideIssues() {
         (issue) =>
           issue.title.toLowerCase().includes(query) ||
           issue.description.toLowerCase().includes(query) ||
-          issue.id.toLowerCase().includes(query) ||
+          issue.setu_id.toLowerCase().includes(query) ||
           issue.category.toLowerCase().includes(query) ||
-          issue.reportedBy.toLowerCase().includes(query)
+          issue.reporter?.full_name.toLowerCase().includes(query) // Changed from creator to reporter
       );
     }
 
@@ -115,35 +118,17 @@ export function SchoolWideIssues() {
         filtered = filtered.filter((i) => i.status === 'resolved' || i.status === 'closed');
         break;
       case 'disputed':
-        // Mock disputed status - for now filter by high escalation
-        filtered = filtered.filter((i) => i.escalation_level >= 3);
+        // Filter by high escalation
+        filtered = filtered.filter((i) => parseInt(i.current_level.substring(1)) >= 3);
         break;
     }
 
     // Apply staff filter
     if (selectedStaffIds.length > 0) {
-      filtered = filtered.filter((issue) => selectedStaffIds.includes(issue.reporterStaffId));
+      filtered = filtered.filter((issue) => selectedStaffIds.includes(issue.reported_by)); // Changed from created_by
     }
 
-    // Apply sorting
-    const sorted = [...filtered];
-    switch (sortBy) {
-      case 'urgency':
-        sorted.sort((a, b) => {
-          const urgencyOrder = { critical: 3, high: 2, low: 1 };
-          return urgencyOrder[b.urgency] - urgencyOrder[a.urgency];
-        });
-        break;
-      case 'date':
-        sorted.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-        break;
-      case 'updated':
-        // For now, same as date - in real app would use updated_at field
-        sorted.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-        break;
-    }
-
-    return sorted;
+    return filtered;
   };
 
   const filteredIssues = getFilteredIssues();
@@ -157,10 +142,9 @@ export function SchoolWideIssues() {
 
   const handlePullToRefresh = () => {
     setIsRefreshing(true);
-    // Simulate refresh delay
-    setTimeout(() => {
+    refetch().finally(() => {
       setIsRefreshing(false);
-    }, 1500);
+    });
   };
 
   const sortOptions = [
@@ -173,6 +157,9 @@ export function SchoolWideIssues() {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F8F9FA]">
+      {/* Offline Banner */}
+      <OfflineBanner />
+
       {/* App Bar - Navy */}
       <div
         className="bg-[#0D1B2A] sticky top-0 z-20"
@@ -480,7 +467,7 @@ export function SchoolWideIssues() {
       <motion.button
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
-        onClick={() => navigate('/report-issue')}
+        onClick={() => navigate('/principal/report')}
         style={{
           position: 'fixed',
           bottom: '24px',
@@ -549,14 +536,14 @@ function StatusChip({ label, i18nKey, active, onClick }: StatusChipProps) {
 
 // School Issue Card Component
 interface SchoolIssueCardProps {
-  issue: SchoolIssue;
+  issue: Issue;
   onClick?: () => void;
 }
 
 function SchoolIssueCard({ issue, onClick }: SchoolIssueCardProps) {
   const statusStyle = statusConfig[issue.status] || statusConfig.open;
-  const escalationStyle = escalationConfig[issue.escalation_level] || escalationConfig[0];
-  const urgencyColor = urgencyColors[issue.urgency] || urgencyColors.low;
+  const escalationStyle = escalationConfig[parseInt(issue.current_level.substring(1))] || escalationConfig[0];
+  const urgencyColor = urgencyColors[getUrgencyLevel(issue.ai_urgency_score)] || urgencyColors.low;
 
   return (
     <div
@@ -576,7 +563,7 @@ function SchoolIssueCard({ issue, onClick }: SchoolIssueCardProps) {
       />
 
       {/* Endorsed Star Badge - Top Right */}
-      {issue.isEndorsed && (
+      {issue.is_endorsed && (
         <div
           className="absolute top-3 right-3"
           style={{
@@ -603,7 +590,7 @@ function SchoolIssueCard({ issue, onClick }: SchoolIssueCardProps) {
             style={{ color: '#6B7280', fontFamily: 'Noto Sans', fontSize: '11px' }}
             data-i18n="lbl_issue_id"
           >
-            #{issue.id}
+            #{issue.setu_id}
           </span>
         </div>
         {/* Status and Escalation badges */}
@@ -680,12 +667,12 @@ function SchoolIssueCard({ issue, onClick }: SchoolIssueCardProps) {
         }}
       >
         <span data-i18n="lbl_reported_by">Reported by:</span>{' '}
-        <span style={{ fontWeight: 600, color: issue.reportedByCurrentUser ? '#F0A500' : '#6B7280' }}>
-          {issue.reportedBy}
+        <span style={{ fontWeight: 600, color: '#6B7280' }}>
+          {issue.reporter?.full_name || 'Staff Member'}
         </span>
       </p>
 
-      {/* Location & Time */}
+      {/* School & Time */}
       <div className="flex items-center justify-between">
         <span
           style={{
@@ -694,7 +681,7 @@ function SchoolIssueCard({ issue, onClick }: SchoolIssueCardProps) {
             color: '#9CA3AF',
           }}
         >
-          {issue.location}
+          {issue.school?.name || 'School'}
         </span>
         <span
           style={{
