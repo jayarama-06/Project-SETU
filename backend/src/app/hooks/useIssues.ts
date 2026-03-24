@@ -1,23 +1,32 @@
 /**
  * useIssues Hook
  * 
- * Fetches and manages issues/grievances from Supabase
- * Supports filtering by school, user, status, etc.
+ * Manages issue data fetching and state from Supabase
  */
 
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 
+/**
+ * Generates a SETU ID from a UUID
+ * Format: SETU-ABC12345
+ */
+export function generateSetuId(uuid: string): string {
+  // Take first 8 characters of UUID (excluding hyphens) and convert to uppercase
+  const cleanUuid = uuid.replace(/-/g, '');
+  const shortCode = cleanUuid.substring(0, 8).toUpperCase();
+  return `SETU-${shortCode}`;
+}
+
 export interface Issue {
   id: string;
-  setu_id: string;
   school_id: string;
-  created_by: string;
+  reported_by: string; // Changed from created_by to match schema
   category: 'water' | 'electricity' | 'building' | 'safety' | 'finance' | 'other';
   title: string;
   description: string;
   photo_url?: string;
-  urgency_score: number;
+  ai_urgency_score: number; // Changed from urgency_score to match schema
   current_level: 'L0' | 'L1' | 'L2' | 'L3' | 'L4';
   status: 'open' | 'acknowledged' | 'in_progress' | 'resolved' | 'closed' | 'escalated';
   is_endorsed: boolean;
@@ -27,8 +36,11 @@ export interface Issue {
   created_at: string;
   updated_at: string;
   
+  // Computed field - always generated from id using generateSetuId()
+  setu_id: string;
+  
   // Joined data
-  creator?: {
+  reporter?: { // Changed from creator to reporter
     id: string;
     full_name: string;
     role: string;
@@ -46,9 +58,9 @@ interface UseIssuesOptions {
   userId?: string;
   status?: Issue['status'] | Issue['status'][];
   category?: Issue['category'] | Issue['category'][];
-  limit?: number;
-  sortBy?: 'created_at' | 'urgency_score' | 'updated_at';
+  sortBy?: 'created_at' | 'updated_at' | 'ai_urgency_score';
   sortOrder?: 'asc' | 'desc';
+  limit?: number;
 }
 
 interface UseIssuesReturn {
@@ -58,6 +70,9 @@ interface UseIssuesReturn {
   refetch: () => Promise<void>;
 }
 
+/**
+ * Hook to fetch multiple issues with filters
+ */
 export function useIssues(options: UseIssuesOptions = {}): UseIssuesReturn {
   const [issues, setIssues] = useState<Issue[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -68,9 +83,9 @@ export function useIssues(options: UseIssuesOptions = {}): UseIssuesReturn {
     userId,
     status,
     category,
-    limit = 100,
     sortBy = 'created_at',
     sortOrder = 'desc',
+    limit = 100,
   } = options;
 
   const fetchIssues = async () => {
@@ -82,7 +97,7 @@ export function useIssues(options: UseIssuesOptions = {}): UseIssuesReturn {
         .from('issues')
         .select(`
           *,
-          creator:users!created_by(
+          reporter:users!reported_by(
             id,
             full_name,
             role
@@ -101,7 +116,7 @@ export function useIssues(options: UseIssuesOptions = {}): UseIssuesReturn {
       }
 
       if (userId) {
-        query = query.eq('created_by', userId);
+        query = query.eq('reported_by', userId);
       }
 
       if (status) {
@@ -130,7 +145,13 @@ export function useIssues(options: UseIssuesOptions = {}): UseIssuesReturn {
 
       if (queryError) throw queryError;
 
-      setIssues((data || []) as Issue[]);
+      // Add computed setu_id field to each issue
+      const issuesWithSetuId = (data || []).map(issue => ({
+        ...issue,
+        setu_id: generateSetuId(issue.id)
+      }));
+
+      setIssues(issuesWithSetuId as Issue[]);
     } catch (err) {
       console.error('Error fetching issues:', err);
       setError(err instanceof Error ? err : new Error('Failed to fetch issues'));
@@ -142,7 +163,7 @@ export function useIssues(options: UseIssuesOptions = {}): UseIssuesReturn {
 
   useEffect(() => {
     fetchIssues();
-  }, [schoolId, userId, JSON.stringify(status), JSON.stringify(category), limit, sortBy, sortOrder]);
+  }, [schoolId, userId, status, category, sortBy, sortOrder, limit]);
 
   return {
     issues,
@@ -170,32 +191,84 @@ export function useIssue(issueId: string, bySetuId = false): {
       setLoading(true);
       setError(null);
 
-      const query = supabase
-        .from('issues')
-        .select(`
-          *,
-          creator:users!created_by(
-            id,
-            full_name,
-            role,
-            phone,
-            designation
-          ),
-          school:schools(
-            id,
-            name,
-            udise_code,
-            district
-          )
-        `);
+      if (bySetuId) {
+        // When searching by SETU ID, fetch all issues and filter client-side
+        // This is necessary because SETU ID is computed from UUID
+        const { data: allIssues, error: queryError } = await supabase
+          .from('issues')
+          .select(`
+            *,
+            reporter:users!reported_by(
+              id,
+              full_name,
+              role,
+              phone,
+              designation
+            ),
+            school:schools(
+              id,
+              name,
+              udise_code,
+              district
+            )
+          `);
 
-      const { data, error: queryError } = await (bySetuId 
-        ? query.eq('setu_id', issueId).single()
-        : query.eq('id', issueId).single());
+        if (queryError) throw queryError;
 
-      if (queryError) throw queryError;
+        if (!allIssues || allIssues.length === 0) {
+          throw new Error('Issue not found');
+        }
 
-      setIssue(data as Issue);
+        // Filter client-side to find exact match
+        const matchedIssue = allIssues.find(issue => {
+          const generatedSetuId = generateSetuId(issue.id);
+          return generatedSetuId === issueId;
+        });
+
+        if (!matchedIssue) {
+          throw new Error('Issue not found');
+        }
+
+        // Add computed setu_id field
+        const issueWithSetuId = {
+          ...matchedIssue,
+          setu_id: generateSetuId(matchedIssue.id)
+        };
+
+        setIssue(issueWithSetuId as Issue);
+      } else {
+        // Fetch by UUID directly
+        const { data, error: queryError } = await supabase
+          .from('issues')
+          .select(`
+            *,
+            reporter:users!reported_by(
+              id,
+              full_name,
+              role,
+              phone,
+              designation
+            ),
+            school:schools(
+              id,
+              name,
+              udise_code,
+              district
+            )
+          `)
+          .eq('id', issueId)
+          .single();
+
+        if (queryError) throw queryError;
+
+        // Add computed setu_id field
+        const issueWithSetuId = {
+          ...data,
+          setu_id: generateSetuId(data.id)
+        };
+
+        setIssue(issueWithSetuId as Issue);
+      }
     } catch (err) {
       console.error('Error fetching issue:', err);
       setError(err instanceof Error ? err : new Error('Failed to fetch issue'));
@@ -224,12 +297,12 @@ export function useIssue(issueId: string, bySetuId = false): {
  */
 export async function createIssue(data: {
   school_id: string;
-  created_by: string;
+  reported_by: string; // Changed from created_by to match schema
   category: Issue['category'];
   title: string;
   description: string;
   photo_url?: string;
-  urgency_score: number;
+  ai_urgency_score: number; // Changed from urgency_score to match schema
 }): Promise<{ success: boolean; issue?: Issue; error?: Error }> {
   try {
     const { data: newIssue, error } = await supabase
@@ -245,7 +318,13 @@ export async function createIssue(data: {
 
     if (error) throw error;
 
-    return { success: true, issue: newIssue as Issue };
+    // Add computed setu_id field
+    const issueWithSetuId = {
+      ...newIssue,
+      setu_id: generateSetuId(newIssue.id)
+    };
+
+    return { success: true, issue: issueWithSetuId as Issue };
   } catch (err) {
     console.error('Error creating issue:', err);
     return {
@@ -265,10 +344,7 @@ export async function updateIssueStatus(
   try {
     const { error } = await supabase
       .from('issues')
-      .update({
-        status,
-        updated_at: new Date().toISOString(),
-      })
+      .update({ status, updated_at: new Date().toISOString() })
       .eq('id', issueId);
 
     if (error) throw error;
@@ -278,13 +354,13 @@ export async function updateIssueStatus(
     console.error('Error updating issue status:', err);
     return {
       success: false,
-      error: err instanceof Error ? err : new Error('Failed to update status'),
+      error: err instanceof Error ? err : new Error('Failed to update issue status'),
     };
   }
 }
 
 /**
- * Helper function to endorse an issue
+ * Helper function to endorse an issue (Principal only)
  */
 export async function endorseIssue(
   issueId: string,
@@ -309,6 +385,35 @@ export async function endorseIssue(
     return {
       success: false,
       error: err instanceof Error ? err : new Error('Failed to endorse issue'),
+    };
+  }
+}
+
+/**
+ * Helper function to withdraw endorsement (Principal only)
+ */
+export async function withdrawEndorsement(
+  issueId: string
+): Promise<{ success: boolean; error?: Error }> {
+  try {
+    const { error } = await supabase
+      .from('issues')
+      .update({
+        is_endorsed: false,
+        endorsed_by: null,
+        endorsed_at: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', issueId);
+
+    if (error) throw error;
+
+    return { success: true };
+  } catch (err) {
+    console.error('Error withdrawing endorsement:', err);
+    return {
+      success: false,
+      error: err instanceof Error ? err : new Error('Failed to withdraw endorsement'),
     };
   }
 }
