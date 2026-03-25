@@ -206,7 +206,12 @@ psql -h db.your-project.supabase.co -U postgres -d postgres -f supabase/schema.s
 
 # Apply RLS policies
 psql -h db.your-project.supabase.co -U postgres -d postgres -f supabase/rls_policies.sql
+
+# Apply security fixes
+psql -h db.your-project.supabase.co -U postgres -d postgres -f supabase/fix_security_warnings_v5_FINAL.sql
 ```
+
+> **Security Note:** The `fix_security_warnings_v5_FINAL.sql` migration adds `SECURITY DEFINER` and `search_path` protection to all database functions, securing them against search path manipulation attacks. This migration also fixes duplicate function definitions and restricts overly permissive RLS policies.
 
 ### Step 3: Deploy Edge Functions
 
@@ -423,4 +428,4 @@ For issues or questions:
 3. Test Edge Functions locally before deploying
 4. Verify environment variables are set correctly
 
-
+**Built for FOSS Hack 2026 | Akulapalli Jayaram**
