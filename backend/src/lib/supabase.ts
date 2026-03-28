@@ -6,9 +6,9 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 // Supabase Configuration
-const supabaseUrl     = import.meta.env.VITE_SUPABASE_URL     || '
+const supabaseUrl     = import.meta.env.VITE_SUPABASE_URL     || ;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY ||
-// Check if Supabase is properly configured
+  // Check if Supabase is properly configured
 export const isSupabaseConfigured = !!(
   supabaseUrl &&
   supabaseAnonKey &&
