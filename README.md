@@ -317,7 +317,20 @@ Please open an [issue](https://github.com/jayarama-06/Project-SETU/issues) befor
 - Mobile UI improvements for low-literacy users
 
 ---
+## Attributions
 
+**Design Tools**
+
+- [Figma](https://figma.com) — UI design, wireframing, and component prototyping
+- [Google Stitch](https://stitch.withgoogle.com) — AI-assisted UI generation (Google Labs) — used for rapid interface ideation and layout exploration
+
+**Open Source Libraries**
+
+- [Next.js](https://nextjs.org) — Frontend framework
+- [shadcn/ui](https://ui.shadcn.com) — UI component library
+- [Tailwind CSS](https://tailwindcss.com) — Utility-first CSS framework
+- [Prisma](https://prisma.io) — Database ORM
+- [PostgreSQL](https://postgresql.org) — Relational database
 ## License
 
 Released under the [MIT License](https://github.com/jayarama-06/Project-SETU/blob/main/LICENSE).
