@@ -1,117 +1,90 @@
-# contributing to SETU
+# Contributing to SETU
 
-hey thanks for wanting to help! here's how to get started
+Thank you for your interest in contributing to SETU. This project is built to serve students in tribal welfare residential schools in Telangana — every contribution, however small, has a real human impact.
 
-## quick start
+## Before You Start
 
-1. fork this repo
-2. clone your fork
-3. install stuff: `npm install`  
-4. make a branch: `git checkout -b fix/whatever`
-5. do your thing
-6. push and open a PR
+Please open an [issue](https://github.com/jayarama-06/Project-SETU/issues) before starting significant work. This avoids duplicate effort and lets us discuss the best approach together.
 
-## what we need help with
+## Ways to Contribute
 
-check the issues tab for stuff labeled `good first issue` or `help wanted`
+You do not have to be a developer to contribute.
 
-some ideas:
-- better telugu translations (current ones are google translate tier)
-- offline sync improvements  
-- test coverage (we have like none lol)
-- accessibility improvements
-- performance optimization
-- bug fixes always welcome
+- **Code** — bug fixes, new features, performance improvements
+- **Design** — UI/UX improvements for low-literacy and mobile users
+- **Translation** — Telugu localisation is a Phase 2 priority
+- **Documentation** — setup guides, API docs, usage examples
+- **Testing** — manual testing, writing tests, accessibility checks
+- **Research** — field research support, stakeholder interviews
 
-## code style
+## Development Setup
 
-we're pretty chill but:
+```bash
+git clone https://github.com/jayarama-06/Project-SETU.git
+cd Project-SETU
 
-- use typescript (no any types unless you have to)
-- format with prettier (runs on save hopefully)  
-- use functional components (no class components)
-- keep components small (if it's 500 lines split it up)
-- actually test your changes (manual testing is fine)
+# Backend
+cd backend
+cp .env.example .env
+npm install
+npx prisma migrate deploy
+npm run dev
 
-## commit messages
-
-just use normal english, something like:
-
-```
-fix login redirect loop on mobile
-add telugu translations for settings page  
-improve urgency score calculation
+# Frontend (separate terminal)
+cd frontend
+npm install
+npm run dev
 ```
 
-no need for conventional commits or whatever unless you want to
+Or use Docker:
 
-## pull requests
+```bash
+docker-compose up --build
+```
 
-- describe what you changed and why
-- screenshots if it's UI stuff  
-- mention which issue it fixes
-- don't stress about it being perfect
+See the [README](./README.md) for full setup instructions.
 
-i'll review and maybe ask for changes but no big deal
+## Submitting a Pull Request
 
-## testing
+1. Fork the repository
+2. Create a branch: `git checkout -b feature/your-feature-name`
+3. Make your changes
+4. Commit using [Conventional Commits](https://www.conventionalcommits.org/):
+   ```
+   feat: add Telugu language support
+   fix: correct priority score calculation
+   docs: update API reference
+   ```
+5. Push and open a pull request against `main`
+6. Describe what you changed and why
 
-uh we should probably have tests but we don't really
+## Code Style
 
-just make sure:
-- npm run dev works
-- your change doesn't break login
-- mobile viewport looks ok (360px)
-- console has no new errors
+- TypeScript throughout — no plain JS in new files
+- Prettier for formatting (`npm run format` in both `frontend/` and `backend/`)
+- ESLint rules are enforced — run `npm run lint` before committing
 
-if you wanna add actual tests that would be sick
+## Reporting Bugs
 
-## design system
+Open an issue with:
+- What you expected to happen
+- What actually happened
+- Steps to reproduce
+- Your OS, browser, and Node version
 
-we use material design 3 with specific colors:
+## Priority Contribution Areas
 
-- deep navy: #0D1B2A
-- saffron gold: #F0A500  
-- light bg: #F8F9FA
+These are the most impactful areas right now:
 
-don't change these unless we're redesigning everything
+- **Offline / PWA support** — critical for low-connectivity rural schools
+- **Telugu localisation** — most school staff are more comfortable in Telugu
+- **Accessibility** — WCAG 2.1 AA compliance for low-literacy users
+- **Mobile UI** — many staff will use SETU on low-end Android phones
 
-8px border radius, 48px min tap targets on mobile
+## Code of Conduct
 
-## database changes
+Be respectful. This project serves a vulnerable community — the same standard of care applies to how we treat each other as contributors.
 
-if you need to change the schema:
+## Contact
 
-1. test locally first (seriously)
-2. write migration sql
-3. update types  
-4. test with existing data
-5. document what changed
-
-breaking changes need a good reason
-
-## questions?
-
-open an issue or discussion if you're not sure about something
-
-or just try it and see what happens. that's what i do
-
-## what not to do
-
-- don't commit .env files (use .env.example)
-- don't push to main directly
-- don't break RLS policies (security first)  
-- don't add huge dependencies for simple things
-- don't delete the audit trail
-
-## license
-
-by contributing you agree to GPL v3 (same as the project)
-
-basically means your code stays open source
-
-## recognition  
-
-contributors get listed in the readme and my eternal gratitude
-
-that's it! ship it 🚀
+**Akulapalli Jayaram** — a.jairam1206@gmail.com
