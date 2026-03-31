@@ -330,8 +330,7 @@ Released under the [MIT License](https://github.com/jayarama-06/Project-SETU/blo
 
 > *"I did not build SETU because I think the people in Gurukulam institutions are failing. I built it because I know they are not — and yet the system around them keeps failing them."*
 
-**B.Tech Artificial Intelligence, SAI University, Chennai**
-📧 a.jairam1206@gmail.com · 📞 +91 7569913305
+
 
 ---
 
