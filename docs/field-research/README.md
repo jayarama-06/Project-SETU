@@ -35,6 +35,3 @@ summaries
 ## Participants
 See [participant-log.md](participant-log.md) for anonymised participant
 counts.
-## Key Findings
-Updated as research progresses. See [insights/](insights/) for weekly
-syntheses.
